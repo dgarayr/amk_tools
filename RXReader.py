@@ -7,6 +7,8 @@ To keep it straightforward, only RXNet file & min.db, ts.db and prod.db files sh
 import numpy as np
 import sqlite3
 import matplotlib.pyplot as plt
+import matplotlib.collections as collections
+import matplotlib.text
 import networkx as nx
 
 # Querying functions
@@ -18,6 +20,19 @@ def query_energy(dbcursor,filterstruc,tablename):
 	matches = dbcursor.execute(qtemp).fetchall()
 	energies = [sum(match) for match in matches]
 	return energies
+
+def query_all(dbcursor,filterstruc,tablename):
+	'''Get energy and ZPEs from a SQL table and sum them'''
+	qtemp = "SELECT energy,zpe,geom,freq FROM %s " % tablename
+	if (filterstruc):
+		qtemp += filterstruc
+	matches = dbcursor.execute(qtemp).fetchall()
+	print(matches)
+	energies = [sum(match[0:2]) for match in matches]
+	geometry = [match[2] for match in matches]
+	frequencies = [match[3] for match in matches]
+	return energies,geometry,frequencies
+	#return energies
 
 # Reaction network reading
 def RX_parser(workfolder,rxnfile="RXNet"):
@@ -125,20 +140,70 @@ def graph_plotter(G):
 	return fig,ax
 
 def graph_plotter_interact(G):
-	# Do a basic plot for the graph generated from the RXNet and the databases
+	'''Generates an interactive plot in which nodes can be clicked to get more information:
+	by now only energy'''
+	# Set nested event response functions so they can freely access all params in the function
+
+	note_track = {}
+	
+	def annotator(axis,text,loc):
+		note = matplotlib.text.Annotation(text,loc,backgroundcolor="#FF1493AA")
+		axis.add_artist(note)
+		return note
+	
+	def onpickx(event):
+		# Recall that what we have is a PathCollection (nodes, plt.scatter) or a LineCollection (edges, ArrowPaths)
+		if isinstance(event.artist,collections.PathCollection):
+			current_artist = event.artist
+			element_type = "NODE"
+		elif isinstance(event.artist,collections.LineCollection):
+			current_artist = event.artist
+			element_type = "EDGE"
+		ind = event.ind[0]
+		# Change reactivity for nodes or edges
+		if (element_type == "NODE"):
+			xx,yy = current_artist.get_offsets()[ind]
+			idname = map_nodes[ind]
+			
+		elif (element_type == "EDGE"):
+			v0,v1 = current_artist.get_paths()[ind].vertices
+			# we want the middle point to place the label
+			xx,yy = 0.5*(np.array(v0) + np.array(v1))
+			idname = map_edges[ind]
+			
+		if (idname not in note_track.keys()):
+			if (element_type == "NODE"):
+				energy = G.nodes[idname]["energy"]
+			elif (element_type == "EDGE"):
+				energy = G.edges[idname[0],idname[1]]["energy"]
+			estring = "%.2f" % energy
+			noteobj = annotator(ax,estring,(xx,yy))
+			note_track[idname] = noteobj
+		else:
+			current_note = note_track[idname]
+			#ax.remove_artist(current_note)
+			current_note.remove()
+			del note_track[idname]
+		ax.figure.canvas.draw_idle()
+		return ind
+	
 	fig = plt.figure()
 	ax = fig.add_subplot(111)
-	# We need position layout & node energies for coloring
 	posx = nx.shell_layout(G)
+	# map indices to keys for nodes and edges (nodes are taken from posx)
+	map_nodes = {ii:name for ii,name in enumerate(posx.keys())}
+	map_edges = {ie:ed for ie,ed in enumerate(G.edges)}
+	# fetch energies
 	energvals = [entry[1] for entry in nx.get_node_attributes(G,"energy").items()]
-	nx.draw(G,posx,with_labels=False,node_color=energvals,alpha=0.5,ax=ax)
-	nx.draw_networkx_labels(G,posx,nx.get_node_attributes(G,"name"),font_weight="bold",ax=ax)
-	edgelabs = nx.get_edge_attributes(G,"name")
-	nx.draw_networkx_edge_labels(G,posx,edgelabs,font_color="red",ax=ax)
-	
-	return fig
-
-
+	nodecol = nx.draw_networkx_nodes(G,posx,ax=ax,alpha=0.5,node_color=energvals)
+	nx.draw_networkx_labels(G,posx)
+	edgecol = nx.draw_networkx_edges(G,posx)
+	nx.draw_networkx_edge_labels(G,posx,nx.get_edge_attributes(G,"name"))
+	# Make the plot reactive
+	nodecol.set_picker(True)
+	edgecol.set_picker(True)
+	fig.canvas.mpl_connect('pick_event',onpickx)
+	return fig,ax
 
 # Profile generation functions
 def node_position(edge,pos_dict,x0,cntr):
