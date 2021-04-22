@@ -11,6 +11,13 @@ import matplotlib.collections as collections
 import matplotlib.text
 import networkx as nx
 
+# Helper functions
+def dict_adder(indict,key,value):
+	# Check if an entry is in the dictionary before adding it
+	if (key not in indict.keys()):
+		indict[key] = value
+	return None
+
 # Querying functions
 def query_energy(dbcursor,filterstruc,tablename):
 	'''Get energy and ZPEs from a SQL table and sum them'''
@@ -92,7 +99,7 @@ def RX_builder(workfolder,data):
 	# Build the graph
 	nodelist = []
 	edgelist = []
-	energydict = {}
+	node_build_dict = {}
 	for tag,ndx in zip(data[0],data[1]):
 		# Skip cases starting with PROD for consistency
 		if (tag[1] == "PROD"):
@@ -100,31 +107,36 @@ def RX_builder(workfolder,data):
 		# Prepare queries and analyze the right side which can be PROD or MIN, treated differently
 		ts_ii,side1_ii,side2_ii = ndx
 		qts,qm1,qm2 = ["WHERE id==%s" % ival for ival in ndx]
-		e_ts = query_energy(dbts,qts,"ts")[0]
-		e_m1 = query_energy(dbmin,qm1,"min")[0]
+		e_ts,geom_ts,freq_ts = [elem[0] for elem in query_all(dbts,qts,"ts")]
+		e_m1,geom_m1,freq_m1 = [elem[0] for elem in query_all(dbmin,qm1,"min")]
 		if (tag[2] == "PROD"):
-			e_m2 = query_energy(dbprod,qm2,"prod")[0]
+			e_m2,geom_m2,freq_m2 = [elem[0] for elem in query_all(dbprod,qm2,"prod")]
 		else:
 			# check for self-loops from MINx to MINx and remove them
 			if (side1_ii == side2_ii):
 				continue
-			e_m2 = query_energy(dbmin,qm2,"min")[0]
+			e_m2,geom_m2,freq_m2 = [elem[0] for elem in query_all(dbmin,qm2,"min")]
+
 		# Compute relative energies and generate consistent labels
 		relvals = [e - e_ref for e in [e_ts,e_m1,e_m2]]
 		labels = [name + str(ii) for name,ii in zip(tag,ndx)]
 		
 		# Construct energy dictionary and a full edge constructor with connections, name and energy parameters
-		current_dict = {lab:e for lab,e in zip(labels,relvals)}
-		energydict.update(current_dict)
-		edgelist.append((labels[1],labels[2],{"name":labels[0],"energy":relvals[0]}))
+		nn1,nn2 = labels[1:3]
+		# Dictionary updaters
+		if (nn1 not in node_build_dict.keys()):
+			nodelist.append((nn1,{"name":nn1,"energy":e_m1,"geometry":geom_m1,"frequencies":freq_m1}))
+		if (nn2 not in node_build_dict.keys()):
+			nodelist.append((nn2,{"name":nn2,"energy":e_m2,"geometry":geom_m2,"frequencies":freq_m2}))
+		edgelist.append((nn1,nn2,{"name":labels[0],"energy":relvals[0],"geometry":geom_ts,"frequencies":freq_ts}))
 
 	# Now generate the graph and then add the corresponding node energies
 	G = nx.Graph()
 	G.add_edges_from(edgelist)
-
-	for nd in G.nodes(data=True):
-		nd[1]["name"] = nd[0]
-		nd[1]["energy"] = energydict[nd[0]]
+	G.add_nodes_from(nodelist)
+	#for nd in G.nodes(data=True):
+		# fetch the corresponding dictionary from the builder
+		#print(nd)
 
 	return G,network_info
 
