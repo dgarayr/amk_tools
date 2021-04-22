@@ -75,6 +75,7 @@ def RX_parser(workfolder,rxnfile="RXNet"):
 	return data
 
 def RX_builder(workfolder,data):
+	network_info = {}
 	# Establish DB connections and fetch all required information to generate a NetworkX graph
 	# Prepare DB connections, as read-only
 	dbnames = ["file:" + workfolder + "/%s.db?mode=ro" % entity for entity in ["min","ts","prod"]]
@@ -85,7 +86,9 @@ def RX_builder(workfolder,data):
 	# we will be using the middle column element with the minimum index, which due to ordering has the minimum energy
 	smin = min([entry[1] for entry in data[1]])
 	e_ref = query_energy(dbmin,"WHERE id==%s" % smin,"min")[0]
-
+	# save in output dict
+	print("MIN",smin,e_ref)
+	network_info = {"ref_struc":"MIN%d" % smin, "ref_energy":e_ref}
 	# Build the graph
 	nodelist = []
 	edgelist = []
@@ -123,7 +126,7 @@ def RX_builder(workfolder,data):
 		nd[1]["name"] = nd[0]
 		nd[1]["energy"] = energydict[nd[0]]
 
-	return G
+	return G,network_info
 
 
 def graph_plotter(G):
@@ -139,7 +142,7 @@ def graph_plotter(G):
 	nx.draw_networkx_edge_labels(G,posx,edgelabs,font_color="red",ax=ax)
 	return fig,ax
 
-def graph_plotter_interact(G):
+def graph_plotter_interact(G,figsize=(10,10)):
 	'''Generates an interactive plot in which nodes can be clicked to get more information:
 	by now only energy'''
 	# Set nested event response functions so they can freely access all params in the function
@@ -147,7 +150,7 @@ def graph_plotter_interact(G):
 	note_track = {}
 	
 	def annotator(axis,text,loc):
-		note = matplotlib.text.Annotation(text,loc,backgroundcolor="#FF1493AA")
+		note = matplotlib.text.Annotation(text,loc,backgroundcolor="#FF1493",fontsize=14)
 		axis.add_artist(note)
 		return note
 	
@@ -186,19 +189,19 @@ def graph_plotter_interact(G):
 			del note_track[idname]
 		ax.figure.canvas.draw_idle()
 		return ind
-	
-	fig = plt.figure()
+	fig = plt.figure(figsize=figsize)
 	ax = fig.add_subplot(111)
+	ax.set_frame_on(False)
 	posx = nx.shell_layout(G)
 	# map indices to keys for nodes and edges (nodes are taken from posx)
 	map_nodes = {ii:name for ii,name in enumerate(posx.keys())}
 	map_edges = {ie:ed for ie,ed in enumerate(G.edges)}
 	# fetch energies
 	energvals = [entry[1] for entry in nx.get_node_attributes(G,"energy").items()]
-	nodecol = nx.draw_networkx_nodes(G,posx,ax=ax,alpha=0.5,node_color=energvals)
-	nx.draw_networkx_labels(G,posx)
+	nodecol = nx.draw_networkx_nodes(G,posx,node_size=500,ax=ax,alpha=0.7,node_color=energvals)
+	nx.draw_networkx_labels(G,posx,font_size=16,font_weight="bold")
 	edgecol = nx.draw_networkx_edges(G,posx)
-	nx.draw_networkx_edge_labels(G,posx,nx.get_edge_attributes(G,"name"))
+	nx.draw_networkx_edge_labels(G,posx,nx.get_edge_attributes(G,"name"),font_size=16,font_color="red")
 	# Make the plot reactive
 	nodecol.set_picker(True)
 	edgecol.set_picker(True)
@@ -292,13 +295,13 @@ def full_profile(graph,startnode):
 		next_nodes = next_gen
 	return list_profiles,list_labels
 
-def profplotter(arrlist,lablist,put_energy=False):
+def profplotter(arrlist,lablist,put_energy=False,figsize=(10,10)):
 	# Pure plotting function
 	# shifts for plotting
 	xshift = 1
 	yshift = 2
 	cmap = plt.get_cmap("tab10")
-	fig,ax = plt.subplots(nrows=1,ncols=1,figsize=(10,10))
+	fig,ax = plt.subplots(nrows=1,ncols=1,figsize=figsize)
 	ax.set_frame_on(False)
 	ax.axes.get_xaxis().set_visible(False)
 	ax.get_yaxis().tick_left()
