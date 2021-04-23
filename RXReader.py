@@ -11,6 +11,11 @@ import matplotlib.collections as collections
 import matplotlib.text
 import networkx as nx
 
+# Constant definitions (from scipy.constants, redefined to avoid additional dependencies)
+hartree_J = 4.3597447222071e-18
+Navogadro = 6.02214076e+23
+hartree_kcal = hartree_J*Navogadro/4184
+
 # Helper functions
 def dict_adder(indict,key,value):
 	# Check if an entry is in the dictionary before adding it
@@ -19,23 +24,34 @@ def dict_adder(indict,key,value):
 	return None
 
 # Querying functions
-def query_energy(dbcursor,filterstruc,tablename):
+def query_energy(dbcursor,filterstruc,tablename,add_zpe=False):
 	'''Get energy and ZPEs from a SQL table and sum them'''
 	qtemp = "SELECT energy,zpe FROM %s " % tablename
 	if (filterstruc):
 		qtemp += filterstruc
 	matches = dbcursor.execute(qtemp).fetchall()
-	energies = [sum(match) for match in matches]
+	if (add_zpe):
+		energies = [sum(match) for match in matches]
+	else:
+		energies = [match[0] for match in matches]
 	return energies
 
-def query_all(dbcursor,filterstruc,tablename):
-	'''Get energy and ZPEs from a SQL table and sum them'''
+def query_all(dbcursor,filterstruc,tablename,add_zpe=False):
+	'''Get energy and ZPEs from a SQL table and sum them
+	Input:
+	- dbcursor. sqlite3 cursor to a connected database
+	- filterstruc. String, WHERE statement to limit the query
+	- tablename. Name of the table to be accessed: min, ts or prod
+	- add_zpe. Boolean, if True the energies will include zero-point 
+	vibrational energy'''
 	qtemp = "SELECT energy,zpe,geom,freq FROM %s " % tablename
 	if (filterstruc):
 		qtemp += filterstruc
 	matches = dbcursor.execute(qtemp).fetchall()
-	print(matches)
-	energies = [sum(match[0:2]) for match in matches]
+	if (add_zpe):
+		energies = [sum(match[0:2]) for match in matches]
+	else:
+		energies = [match[0] for match in matches]
 	geometry = [match[2] for match in matches]
 	frequencies = [match[3] for match in matches]
 	return energies,geometry,frequencies
@@ -93,9 +109,15 @@ def RX_builder(workfolder,data):
 	# we will be using the middle column element with the minimum index, which due to ordering has the minimum energy
 	smin = min([entry[1] for entry in data[1]])
 	e_ref = query_energy(dbmin,"WHERE id==%s" % smin,"min")[0]
+
+	# the units of this energy are kcal/mol from MOPAC (LL) and hartree from G09 (HL)
+	if ("LL" in workfolder):
+		network_info["e_units"] = "kcal"
+	else:
+		network_info["e_units"] = "hartree"
+
 	# save in output dict
-	print("MIN",smin,e_ref)
-	network_info = {"ref_struc":"MIN%d" % smin, "ref_energy":e_ref}
+	network_info.update({"ref_struc":"MIN%d" % smin, "ref_energy":e_ref})
 	# Build the graph
 	nodelist = []
 	edgelist = []
@@ -125,19 +147,17 @@ def RX_builder(workfolder,data):
 		nn1,nn2 = labels[1:3]
 		# Dictionary updaters
 		if (nn1 not in node_build_dict.keys()):
-			nodelist.append((nn1,{"name":nn1,"energy":e_m1,"geometry":geom_m1,"frequencies":freq_m1}))
+			nodelist.append((nn1,{"name":nn1,"energy":relvals[1],"geometry":geom_m1,"frequencies":freq_m1}))
 		if (nn2 not in node_build_dict.keys()):
-			nodelist.append((nn2,{"name":nn2,"energy":e_m2,"geometry":geom_m2,"frequencies":freq_m2}))
+			nodelist.append((nn2,{"name":nn2,"energy":relvals[2],"geometry":geom_m2,"frequencies":freq_m2}))
 		edgelist.append((nn1,nn2,{"name":labels[0],"energy":relvals[0],"geometry":geom_ts,"frequencies":freq_ts}))
 
 	# Now generate the graph and then add the corresponding node energies
 	G = nx.Graph()
 	G.add_edges_from(edgelist)
 	G.add_nodes_from(nodelist)
-	#for nd in G.nodes(data=True):
-		# fetch the corresponding dictionary from the builder
-		#print(nd)
-
+	# Add the network_info dict as a Graph.Graph property
+	G.graph.update(network_info)
 	return G,network_info
 
 
@@ -156,8 +176,10 @@ def graph_plotter(G):
 
 def graph_plotter_interact(G,figsize=(10,10)):
 	'''Generates an interactive plot in which nodes can be clicked to get more information:
-	by now only energy'''
+	by now only energy in kcal/mol'''
 	# Set nested event response functions so they can freely access all params in the function
+	# check units
+	unit_change = G.graph["e_units"] == "hartree"
 
 	note_track = {}
 	
@@ -191,6 +213,8 @@ def graph_plotter_interact(G,figsize=(10,10)):
 				energy = G.nodes[idname]["energy"]
 			elif (element_type == "EDGE"):
 				energy = G.edges[idname[0],idname[1]]["energy"]
+			if (unit_change):
+				energy = energy*hartree_kcal
 			estring = "%.2f" % energy
 			noteobj = annotator(ax,estring,(xx,yy))
 			note_track[idname] = noteobj
@@ -228,7 +252,7 @@ def node_position(edge,pos_dict,x0,cntr):
 		n1_x0 = pos_dict[n1]
 	except:
 		n1_x0 = x0
-	# and do the same for the second node, which will be at +-8 units
+	# In the second node, only keep track for minima
 	try:
 		n2_x0 = pos_dict[n2]
 		sign = np.sign(n2_x0 - n1_x0)
@@ -240,7 +264,9 @@ def node_position(edge,pos_dict,x0,cntr):
 		else:
 			sign = -1
 		n2_x0 = n1_x0 + sign*8
-	print("POSITIONING",n1,n1_x0,n2,n2_x0)
+	# Check that positions don't overlap: if they do, move the second but don't track it
+	if (n1_x0 == n2_x0):
+		print("oVerLaP",n1_x0,n2_x0,edge)
 	# now provide all X-positions: n1_x0, n1_x1, n2_x0, n2_x1 and the sign
 	n1_x1,n2_x1 = [n_x0 + 2 for n_x0 in [n1_x0,n2_x0]]
 	return [n1_x0,n1_x1],[n2_x0,n2_x1],sign
@@ -260,8 +286,10 @@ def line_iterator(graph,node,pos_dict,used_ts,x0=0):
 		# horizontal positioning 
 		n1pos,n2pos,sgn = node_position(ed,pos_dict,x0,cnt)
 		tspos = [n1x+sgn*4 for n1x in n1pos]
-		pos_dict[ed[0]] = n1pos[0]
-		pos_dict[ed[1]] = n2pos[0]
+		# Don't keep track of products: these can be repeated along the plot
+		for nd,npos in zip(ed,[n1pos,n2pos]):
+			if ("MIN" in nd):
+				pos_dict[nd] = npos[0]
 		# vertical positioning: energies
 		n1_e = graph.nodes[ed[0]]["energy"]
 		n2_e = graph.nodes[ed[1]]["energy"]
@@ -280,23 +308,21 @@ def line_iterator(graph,node,pos_dict,used_ts,x0=0):
 		cnt += 1
 	return list_arrs,list_labels,neighborhood
 
-def full_profile(graph,startnode):
+def full_profile(G,startnode):
 	# Here we can iterate along the whole network
 	# define the intermediate lists & dicts
 	pos_dict = {}
 	tslist = []
 	x0 = 0
 	next_gen = []
-	list_profiles,list_labels,next_nodes = line_iterator(graph,startnode,pos_dict,tslist,x0)	
-	print("POS",pos_dict)
+	list_profiles,list_labels,next_nodes = line_iterator(G,startnode,pos_dict,tslist,x0)	
 	update_flag = bool(list_profiles)
 	while (update_flag):
 		current_state = []
 		nw_profiles = []
 		nw_labels = []
 		for nwstart in next_nodes:
-			add_profiles,add_labels,nw_nodes = line_iterator(graph,nwstart,pos_dict,tslist,x0)
-			print("POS",pos_dict)
+			add_profiles,add_labels,nw_nodes = line_iterator(G,nwstart,pos_dict,tslist,x0)
 			next_gen += [item for item in nw_nodes if item not in next_gen]
 			nw_profiles += add_profiles
 			nw_labels += add_labels
@@ -305,6 +331,12 @@ def full_profile(graph,startnode):
 		list_labels += nw_labels
 		update_flag = np.any(current_state)    
 		next_nodes = next_gen
+	# Unit handling
+	unit_change = G.graph["e_units"] == "hartree"
+	if (unit_change):
+		for prof in list_profiles:
+			prof[:,1] *= hartree_kcal
+		print(list_profiles)
 	return list_profiles,list_labels
 
 def profplotter(arrlist,lablist,put_energy=False,figsize=(10,10)):
@@ -334,3 +366,29 @@ def profplotter(arrlist,lablist,put_energy=False,figsize=(10,10)):
 			if (put_energy):
 				ax.annotate(evalue,[loc[0],loc[1]-yshift],horizontalalignment='center',verticalalignment='top').draggable()
 	return fig,ax
+
+# Functions to fetch geometries
+def xyz_generator(item_select):
+	# from a node or edge, extract geometry in a xyz file, indicating name & energy in comment line
+	# get no. of atoms
+	geoblock = item_select["geometry"]
+	Nat = geoblock.count("\n") + 1
+	xyzblock = "%d\n" % Nat
+	xyzblock += "%s    energy=%.2f \n" % (item_select["name"],item_select["energy"])
+	xyzblock += item_select["geometry"]
+	return xyzblock
+
+def profile_geometrist(G,label_list,out_folder="xyz_profiles"):
+	'''From the list of labels generated by full_profile(), fetch all geometries and join
+	them in XYZ files for the 3-structure reaction stage'''
+	for lab in label_list:
+		px = lab[::2] # as these are duplicated
+		out_name = "_".join(px)
+		sel_n1 = G.nodes[px[0]]
+		sel_n2 = G.nodes[px[2]]
+		sel_ts = G.edges[(px[0],px[2])]
+		join_xyz = "\n".join([xyz_generator(elem) for elem in [sel_n1,sel_ts,sel_n2]])
+		froute = "%s/%s.xyz" % (out_folder,out_name)
+		with open(froute,"w+") as fxyz:
+			fxyz.write(join_xyz)
+	return None
