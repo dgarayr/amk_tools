@@ -14,6 +14,30 @@ def generate_inline_mol(xyzstring):
 	mol_script_string = r"data 'model X'|" + xyzsubst + r"|end 'model X';show data" 
 	return mol_script_string 
 
+def generate_inline_mol_freqs(bkdata,ndx):
+	'''From the corresponding ColumnDataSource, fetch geometry, frequencies and vibration displacements
+	and generate the corresponding list of models'''
+	geo = bkdata["geometry"][ndx]
+	name = bkdata["name"][ndx]
+	frq = bkdata["frequencies"][ndx]
+	displ = bkdata["vibr_displace"][ndx]
+	# we need to merge each displacement with the coordinates (and with a charge placeholder), and add the freq value as a comment
+	freqvals = frq.split("\n")
+	coords = geo.split("\n")
+	Nat = len(coords)
+	displ_strings = [[" ".join(line) for line in dx] for dx in displ]
+	
+	model_freq_block = "load data 'model FRQS'\n"
+	for jj,dx in enumerate(displ_strings):
+		out_list = [line_crd + " 0 " + line_displ for line_crd,line_displ in zip(coords,dx)]	
+		model_freq_block += "%d\n" % Nat
+		model_freq_block += "frq = %.2f cm-1 \n" % float(freqvals[jj])
+		model_freq_block += ("\n".join(out_list) + "\n")
+
+	model_freq_block += "end 'model FRQS'"
+
+	return model_freq_block	
+
 def xyz_from_atoms(atomblock,comment=""):
 	'''Generate a XYZ block from a block of text containing atoms and positions separated
 	by newlines, as stored in the "geometry" property in RXReader'''
@@ -50,20 +74,25 @@ def generate_applet():
 	return info_dict,applet,script_source
 
 
-def bokeh_network_view(G,positions=None):
+def bokeh_network_view(G,positions=None,width=800,height=600):
 	'''
 	Use the from_networkx() method in Bokeh to build a visualization of the reaction network as
 	processed by RXReader, and add interactivity (hovering & picking)
 	'''
 
 	# Start by instantiating the Bokeh figure and the graph that we will append there
-	bfig = bokeh.plotting.figure(title="Graph",width=800,height=600,tools="pan,wheel_zoom,box_zoom,reset")
+	bokeh.plotting.Figure()
+	bfig = bokeh.plotting.figure(title="Reaction network representation",width=width,height=height,tools="pan,wheel_zoom,box_zoom,reset",
+								x_range=bkm.Range1d(-1.1,1.1),y_range=bkm.Range1d(-1.1,1.1))
+	bfig.axis.visible = False
+	bfig.xgrid.grid_line_color = None
+	bfig.ygrid.grid_line_color = None
 	# Check if positions were passed, and create inside instead
 	if (not positions):
 		print("Generating network layout")
 		positions = nx.spring_layout(G)
 
-	Gbok = bokeh.plotting.from_networkx(G,layout_function=positions)
+	Gbok = bokeh.plotting.from_networkx(G,layout_function=positions,scale=1,center=(0,0))
 	bfig.renderers.append(Gbok)
 
 	# Modify how nodes are rendered: access the ColumnDataSource for energies and build the transformation
@@ -139,6 +168,27 @@ def full_view_layout(bokeh_figure,bokeh_graph):
 		mol = generate_inline_mol(xyz)
 		script_source.data['script'] = [mol]
 
+	def load_vibration():
+		nodesource = bokeh_graph.node_renderer.data_source
+		edgesource = bokeh_graph.edge_renderer.data_source
+		# check node and edge sources
+		is_node,is_edge = [bool(source.selected.indices) for source in [nodesource,edgesource]]
+		# select the source
+		if (is_node and not is_edge):
+			sel_source = nodesource
+		elif (is_edge and not is_node):
+			sel_source = edgesource
+		else:
+			return None
+		ndx = sel_source.selected.indices[0]
+		# get the name: if it is PROD skip it as these do not have frequencies
+		name = sel_source.data["name"][ndx]
+		if ("PROD" in name):
+			return None
+		model_freq_block = generate_inline_mol_freqs(sel_source.data,ndx)
+		script_source.data['script'] = [model_freq_block + "; vibration on ; vibration scale 0.5"]
+		# Fetch geometry and name, then convert to XYZ and pass to JSMol
+
 	def click_callback(attr,old,new):
 		# Just to allow to change the molecule by direct clicking
 		change_mol()
@@ -148,13 +198,17 @@ def full_view_layout(bokeh_figure,bokeh_graph):
 	info,app,script_source = generate_applet()
 
 	# Add the second tap
-	tap_change = bkm.TapTool(renderers=[bokeh_graph.node_renderer,bokeh_graph.edge_renderer],gesture="doubletap")
+	tap_change = bkm.TapTool(renderers=[bokeh_graph.node_renderer,bokeh_graph.edge_renderer],gesture="tap")
 
 	bokeh_figure.add_tools(tap_change)
 	# Set up the callback for nodes and edges (and then the change_mol will take care of which shall be displayed)
 	for source in [bokeh_graph.node_renderer,bokeh_graph.edge_renderer]:
 		source.data_source.selected.on_change('indices',click_callback) 
 
-	layout = bokeh.layouts.gridplot([bokeh_figure,app],ncols=2)
+	# Additional button
+	b1 = bkm.Button(label="Load vibration")
+	b1.on_click(load_vibration)
+
+	layout = bokeh.layouts.gridplot([bokeh_figure,app,b1],ncols=3)
 
 	return layout

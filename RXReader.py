@@ -23,6 +23,29 @@ def dict_adder(indict,key,value):
 		indict[key] = value
 	return None
 
+def xyz_line_parse(xyzline):
+	split_line = xyzline.split()
+	at = split_line[0]
+	xyz = [float(item) for item in split_line[1:]]
+	return [at] + xyz 
+
+def molden_vibration_parser(moldenfile):
+	'''Parse a MOLDEN file containing vibrational structures'''
+	with open(moldenfile,"r") as fmold:
+		dump = fmold.read()
+	sel_list = dump.split("]")[2:]
+	proc_list = [item.split('[')[0].strip() for item in sel_list]
+	# Now we can process every item
+	freqs = [float(entry) for entry in proc_list[0].split()]
+	coords = [xyz_line_parse(line) for line in proc_list[1].split("\n")]
+	# Get no. of atoms from coordinates and use this to handle vibrations as a list of lists
+	displ_block = proc_list[2].split("\n")
+	nlines = len(coords) + 1
+	displacements = [displ_block[ii+1:ii+nlines] for ii in range(0,len(displ_block),nlines)]
+	for jj,displ in enumerate(displacements):
+		displacements[jj] = [line.split() for line in displ]
+	return freqs,coords,displacements
+
 # Querying functions
 def query_energy(dbcursor,filterstruc,tablename,add_zpe=False):
 	'''Get energy and ZPEs from a SQL table and sum them'''
@@ -55,7 +78,6 @@ def query_all(dbcursor,filterstruc,tablename,add_zpe=False):
 	geometry = [match[2] for match in matches]
 	frequencies = [match[3] for match in matches]
 	return energies,geometry,frequencies
-	#return energies
 
 # Reaction network reading
 def RX_parser(workfolder,rxnfile="RXNet"):
@@ -160,6 +182,25 @@ def RX_builder(workfolder,data):
 	G.graph.update(network_info)
 	return G,network_info
 
+def vibr_displ_parser(workfolder,G):
+	'''Add vibrational displacements to a existing graph, for further visualization'''
+	nm_folder = workfolder + "/normal_modes"
+
+	# Nodes first, then edges, remembering that there is no info for PROD species
+	for nd in G.nodes(data=True):
+		if ("MIN" in nd[0]):
+			ndid = int(nd[0].replace("MIN",""))
+			nm_file = nm_folder + "/MIN%04d.molden" % ndid
+			frq,coords,displ = molden_vibration_parser(nm_file)
+			nd[1]["vibr_displace"] = displ
+
+	for ed in G.edges(data=True):
+		tsid = int(ed[2]["name"].replace("TS",""))
+		nm_file = nm_folder + "/TS%04d.molden" % tsid
+		frq,coords,displ = molden_vibration_parser(nm_file)
+		ed[2]["vibr_displace"] = displ
+	# And the graph is modified in-place
+	return None
 
 def graph_plotter(G):
 	# Do a basic plot for the graph generated from the RXNet and the databases
