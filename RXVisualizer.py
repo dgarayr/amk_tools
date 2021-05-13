@@ -14,13 +14,11 @@ def generate_inline_mol(xyzstring):
 	mol_script_string = r"data 'model X'|" + xyzsubst + r"|end 'model X';show data" 
 	return mol_script_string 
 
-def xyz_from_atoms(atomblock):
+def xyz_from_atoms(atomblock,comment=""):
 	'''Generate a XYZ block from a block of text containing atoms and positions separated
 	by newlines, as stored in the "geometry" property in RXReader'''
 	Nat = len(atomblock.split("\n"))
-	print("we have %d atoms" % Nat)
-	print(atomblock)
-	block = "%d\n\n" % Nat
+	block = "%d\n%s\n" % (Nat,comment)
 	block += atomblock
 	return block
 
@@ -62,6 +60,7 @@ def bokeh_network_view(G,positions=None):
 	bfig = bokeh.plotting.figure(title="Graph",width=800,height=600,tools="pan,wheel_zoom,box_zoom,reset")
 	# Check if positions were passed, and create inside instead
 	if (not positions):
+		print("Generating network layout")
 		positions = nx.spring_layout(G)
 
 	Gbok = bokeh.plotting.from_networkx(G,layout_function=positions)
@@ -84,7 +83,7 @@ def bokeh_network_view(G,positions=None):
 	nodenames,coords = zip(*positions.items())
 	xn,yn = zip(*coords)
 	posnode_dict = {'xn':xn,'yn':yn,'nnames':nodenames}
-	posnode = bkm.ColumnDataSource(posdata_dict)
+	posnode = bkm.ColumnDataSource(posnode_dict)
 	labels_node = bkm.LabelSet(x='xn', y='yn', text='nnames', text_font_style='bold',
 				  x_offset=0, y_offset=5, source=posnode, render_mode='canvas')
 	bfig.add_layout(labels_node)
@@ -92,7 +91,7 @@ def bokeh_network_view(G,positions=None):
 	# TS labels: fetch central position and name for every edge
 	posedge_dict = {'xe':[],'ye':[],'enames':[],'etuples':[]}
 	for ed in G.edges(data=True):
-		xy1,xy2 = [posx[nn] for nn in ed[0:2]]
+		xy1,xy2 = [positions[nn] for nn in ed[0:2]]
 		mid = 0.5*(xy1+xy2)
 		output = [mid[0],mid[1],ed[2]["name"],(ed[0],ed[1])]
 		for ik,key in enumerate(['xe','ye','enames','etuples']):
@@ -120,13 +119,9 @@ def full_view_layout(bokeh_figure,bokeh_graph):
 	'''From the hover-able graph visualization, add the JSMol widget and the interaction buttons.
 	Nested functions here allow interactivity'''
 
-	def run_script():
-		script_source.data['script'] = [input_script.value]
-		print("DATA===>",ss2.data)
-
-	def change_node():
+	def change_mol():
 		nodesource = bokeh_graph.node_renderer.data_source
-		edgesource = bokeh_graph.node_renderer.edge_source
+		edgesource = bokeh_graph.edge_renderer.data_source
 		# check node and edge sources
 		is_node,is_edge = [bool(source.selected.indices) for source in [nodesource,edgesource]]
 		# select the source
@@ -140,21 +135,26 @@ def full_view_layout(bokeh_figure,bokeh_graph):
 		# Fetch geometry and name, then convert to XYZ and pass to JSMol
 		geo = sel_source.data["geometry"][ndx]
 		name = sel_source.data["name"][ndx]
-		xyz = xyz_from_atoms(geo)
+		xyz = xyz_from_atoms(geo,comment=name)
 		mol = generate_inline_mol(xyz)
 		script_source.data['script'] = [mol]
+
+	def click_callback(attr,old,new):
+		# Just to allow to change the molecule by direct clicking
+		change_mol()
+
 
 	# Instantiate the applet
 	info,app,script_source = generate_applet()
 
-	# Create buttons
-	button = bkm.widgets.Button(label='Pass parameter')
-	button2 = bkm.widgets.Button(label='Modify geometry')
-	input_script = bkm.widgets.TextInput(value='background white;')
+	# Add the second tap
+	tap_change = bkm.TapTool(renderers=[bokeh_graph.node_renderer,bokeh_graph.edge_renderer],gesture="doubletap")
 
-	button.on_click(run_script)
-	button2.on_click(change_node)
+	bokeh_figure.add_tools(tap_change)
+	# Set up the callback for nodes and edges (and then the change_mol will take care of which shall be displayed)
+	for source in [bokeh_graph.node_renderer,bokeh_graph.edge_renderer]:
+		source.data_source.selected.on_change('indices',click_callback) 
 
-	layout = bokeh.layouts.gridplot([bokeh_figure,app,bkm.Column(button,button2,input_script)],ncols=3)
+	layout = bokeh.layouts.gridplot([bokeh_figure,app],ncols=2)
 
 	return layout
