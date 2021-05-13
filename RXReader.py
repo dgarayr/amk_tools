@@ -210,13 +210,14 @@ def graph_plotter_interact(G,figsize=(10,10)):
 			
 		if (idname not in note_track.keys()):
 			if (element_type == "NODE"):
-				energy = G.nodes[idname]["energy"]
+				energy,objname = [G.nodes[idname][prop] for prop in ["energy","name"]]
 			elif (element_type == "EDGE"):
-				energy = G.edges[idname[0],idname[1]]["energy"]
+				energy,objname = [G.edges[idname[0],idname[1]][prop] for prop in ["energy","name"]]
 			if (unit_change):
 				energy = energy*hartree_kcal
 			estring = "%.2f" % energy
-			noteobj = annotator(ax,estring,(xx,yy))
+			notelabel = "%s \n (%.2f)" % (objname,energy)
+			noteobj = annotator(ax,notelabel,(xx,yy))
 			note_track[idname] = noteobj
 		else:
 			current_note = note_track[idname]
@@ -242,6 +243,11 @@ def graph_plotter_interact(G,figsize=(10,10)):
 	nodecol.set_picker(True)
 	edgecol.set_picker(True)
 	fig.canvas.mpl_connect('pick_event',onpickx)
+
+	# axis rescaling avoids border clipping for nodes
+	rescaling = 1.2
+	ax.set_xlim([rescaling * x for x in ax.get_xlim()])
+	ax.set_ylim([rescaling * y for y in ax.get_ylim()])
 	return fig,ax
 
 # Profile generation functions
@@ -266,7 +272,7 @@ def node_position(edge,pos_dict,x0,cntr):
 		n2_x0 = n1_x0 + sign*8
 	# Check that positions don't overlap: if they do, move the second but don't track it
 	if (n1_x0 == n2_x0):
-		print("oVerLaP",n1_x0,n2_x0,edge)
+		print("Overlapping positions:",n1_e0,n2_x0,edge)
 	# now provide all X-positions: n1_x0, n1_x1, n2_x0, n2_x1 and the sign
 	n1_x1,n2_x1 = [n_x0 + 2 for n_x0 in [n1_x0,n2_x0]]
 	return [n1_x0,n1_x1],[n2_x0,n2_x1],sign
@@ -336,7 +342,6 @@ def full_profile(G,startnode):
 	if (unit_change):
 		for prof in list_profiles:
 			prof[:,1] *= hartree_kcal
-		print(list_profiles)
 	return list_profiles,list_labels
 
 def profplotter(arrlist,lablist,put_energy=False,figsize=(10,10)):
