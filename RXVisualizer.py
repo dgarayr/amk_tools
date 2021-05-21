@@ -295,9 +295,7 @@ def full_view_layout(bokeh_figure,bokeh_graph,py_callbacks=True):
 			var rend = erend
 		}
 		var ndx = rend.selected.indices[0]
-		var message = "selection callback"
 		var vibr_models = rend.data["vibr_models"][ndx]
-		console.log(vibr_models)
 		if (vibr_models.length){
 			source.data["script"] = [vibr_models + "; vibration on ; vibration scale 0.5"]
 		}
@@ -318,8 +316,35 @@ def full_view_layout(bokeh_figure,bokeh_graph,py_callbacks=True):
 	else:
 		b1.js_on_click(js_load_vibrations)
 
+	# Button to pass current geometry to clipboard
+	b2 = bkm.Button(label="Geometry to clipboard")
+	# use same logic as for loading vibrations 
+	js_geo_clipboard = bkm.CustomJS(args = {'nrend':nodesource,'erend':edgesource,"source":script_source,'b2':b2}, code = """
+		var ninds = nrend.selected.indices
+		var einds = erend.selected.indices
+		if (ninds.length) {
+			var rend = nrend
+		} else {
+			var rend = erend
+		}
+		var ndx = rend.selected.indices[0]
+		var geo = rend.data["geometry"][ndx]
+		var name = rend.data["name"][ndx]
+		var orig_label = b2.label
+		// use a function to apply setTimeout and recover original label
+		function recover_label(b2,orig_label){
+			b2.label = orig_label
+		}	
+
+		if (geo.length){
+			navigator.clipboard.writeText([geo])
+			b2.label = "Copied " + name + "!"
+			setTimeout(recover_label,2000,b2,orig_label)
+		}
+		""")
+	b2.js_on_click(js_geo_clipboard)
 	# Dispose the layout: graph at left, column with JSMol and buttons right
-	col2 = bkm.Column(app,b1)
+	col2 = bkm.Column(app,b1,b2)
 	layout = bokeh.layouts.gridplot([bokeh_figure,col2],ncols=2)
 
 	return layout
