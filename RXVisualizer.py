@@ -210,7 +210,10 @@ def bokeh_network_view(G,positions=None,width=800,height=600):
 js_callback_dict = {
 	# Dictionary storing JS code for bokeh.models.CustomJS definitions
 	"loadMolecule":"""
-		//nrend - node renderer, erend - edgerenderer, source - source object for JSMol
+		// from graph, we fetch nrend - node renderer, erend - edgerenderer
+		//source - source object for JSMol
+		var nrend = graph.node_renderer.data_source
+		var erend = graph.edge_renderer.data_source
 		if (cb_obj.indices.length) {
 			var ninds = nrend.selected.indices
 			var einds = erend.selected.indices
@@ -227,7 +230,11 @@ js_callback_dict = {
 		""",
 
 	"loadVibrations":"""
-		//nrend - node renderer, erend - edgerenderer, source - source object for JSMol
+		// from graph, we fetch nrend - node renderer, erend - edgerenderer, 
+		// source - source object for JSMol
+		var nrend = graph.node_renderer.data_source
+		var erend = graph.edge_renderer.data_source
+		
 		var ninds = nrend.selected.indices
 		var einds = erend.selected.indices
 		if (ninds.length) {
@@ -244,7 +251,11 @@ js_callback_dict = {
 		""",
 
 	"molToClipboard":"""
-		//nrend - node renderer, erend - edgerenderer, source - source object for JSMol, button - button object
+		// from graph, we fetch nrend - node renderer, erend - edgerenderer
+		// source - source object for JSMol, button - button object
+		var nrend = graph.node_renderer.data_source
+		var erend = graph.edge_renderer.data_source
+
 		var ninds = nrend.selected.indices
 		var einds = erend.selected.indices
 		if (ninds.length) {
@@ -269,14 +280,23 @@ js_callback_dict = {
 		""",
 
 		"locateMolecule":"""
-		//nrend - node renderer, source - source object for JSMol, text_input - text input object
+		// source - source object for JSMol
+		// from graph, we fetch nrend (node renderer), erend and layout
+		// from fig, we modify x_range and y_range. Default plot starts from -1.2 to 1.2,
+		var nrend = graph.node_renderer.data_source
+		var layout = graph.layout_provider.graph_layout
+		// fetch the query in the data sources
 		var mol_query = text_input.value
 		var all_names = nrend.data["name"]
 		var ndx = all_names.indexOf(mol_query)
-		console.log(ndx)
 		// returns -1 if element is not present
 		if (ndx >= 0) {
 			nrend.selected.indices = [ndx]
+			var positions = layout[mol_query]
+			fig.x_range.start = positions[0] - 1.0
+			fig.x_range.end = positions[0] + 1.0
+			fig.y_range.start = positions[1] - 1.0
+			fig.y_range.end = positions[1] + 1.0
 		}
 		"""
 }
@@ -292,6 +312,7 @@ def full_view_layout(bokeh_figure,bokeh_graph,py_callbacks=True):
 	'''
 	# Add access to data sources for nodes and edges
 	nodesource = bokeh_graph.node_renderer.data_source
+	print(vars(nodesource))
 	edgesource = bokeh_graph.edge_renderer.data_source
 	def load_mol():
 		'''Generation of a JSMol model for a given species in the network and loading in the widget'''
@@ -343,10 +364,10 @@ def full_view_layout(bokeh_figure,bokeh_graph,py_callbacks=True):
 
 	# Write the JavaScript callback to allow to avoid the Bokeh server: all is ported to JavaScript
 	# For this to work, we need to pre-load all models in the graph
-	js_load_mol = bkm.CustomJS(args = {'nrend':nodesource,'erend':edgesource,"source":script_source}, 
+	js_load_mol = bkm.CustomJS(args = {"graph":bokeh_graph,"source":script_source}, 
 							   code = js_callback_dict["loadMolecule"])
 
-	js_load_vibrations = bkm.CustomJS(args = {'nrend':nodesource,'erend':edgesource,"source":script_source}, 
+	js_load_vibrations = bkm.CustomJS(args = {"graph":bokeh_graph,"source":script_source}, 
 									  code = js_callback_dict["loadVibrations"])
 
 	# Set up the callbacks for nodes and edges, either from Python or from JS
@@ -366,14 +387,14 @@ def full_view_layout(bokeh_figure,bokeh_graph,py_callbacks=True):
 	# Button to pass current geometry to clipboard
 	b2 = bkm.Button(label="Geometry to clipboard")
 	# use same logic as for loading vibrations 
-	js_geo_clipboard = bkm.CustomJS(args = {'nrend':nodesource,'erend':edgesource,"source":script_source,'button':b2}, 
+	js_geo_clipboard = bkm.CustomJS(args = {"graph":bokeh_graph,"source":script_source,'button':b2}, 
 									code = js_callback_dict["molToClipboard"])
 	b2.js_on_click(js_geo_clipboard)
 	
 	# Allow to select by name
 	text_input = bkm.TextInput(value=nodesource.data["name"][0])
 	b3 = bkm.Button(label="Locate molecule")
-	js_mol_locator = bkm.CustomJS(args = {'nrend':nodesource,"source":script_source,"text_input":text_input},
+	js_mol_locator = bkm.CustomJS(args = {"graph":bokeh_graph,"fig":bokeh_figure,"text_input":text_input},
 								  code = js_callback_dict["locateMolecule"])
 	b3.js_on_click(js_mol_locator)
 	# Dispose the layout: graph at left, column with JSMol and buttons right
