@@ -312,7 +312,6 @@ def full_view_layout(bokeh_figure,bokeh_graph,py_callbacks=True):
 	'''
 	# Add access to data sources for nodes and edges
 	nodesource = bokeh_graph.node_renderer.data_source
-	print(vars(nodesource))
 	edgesource = bokeh_graph.edge_renderer.data_source
 	def load_mol():
 		'''Generation of a JSMol model for a given species in the network and loading in the widget'''
