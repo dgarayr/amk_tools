@@ -145,7 +145,7 @@ def RX_parser(workfolder,rxnfile="RXNet"):
 		data = [tags,indices]
 	return data
 
-def RX_builder(workfolder,data):
+def RX_builder(workfolder,data,orig_selec_mode=False):
 	'''From the connectivity data parsed in RX_parser(), generate the graph structure and querying information from the corresponding 
 	SQL databases to add information (energy, geometry and lists of frequencies) to the network. Relative energies are also computed here,
 	taking the lowest-energy intermediate as reference.
@@ -153,6 +153,7 @@ def RX_builder(workfolder,data):
 	- workfolder. String, folder where the RXNet file and the SQL databases will be read from
 	- data. List of lists, containing the tags and indices of the node - edge - node pairs in the reaction
 	network required to build the corresponding graph -> RX_parser() direct output.
+	- orig_selec_mode. Boolean, if True, remove entries starting from PROD structures following original AMK coding
 	Output:
 	- G. NetworkX.Graph() object including intermediate and TS information embedded in every node and edge, as fetched
 	from the corresponding databases. Additional information used on graph creation (e.g. the reference structure) is passed
@@ -164,6 +165,7 @@ def RX_builder(workfolder,data):
 	dbnames = ["file:" + workfolder + "/%s.db?mode=ro" % entity for entity in ["min","ts","prod"]]
 	dbconnections = [sqlite3.connect(db,uri=True) for db in dbnames]
 	dbmin,dbts,dbprod = [dbcon.cursor() for dbcon in dbconnections]
+	dbdict = {"min":dbmin, "ts":dbts, "prod":dbprod}
 	
 	# We first need to have a energy reference: for consistency with the original implementation,
 	# we will be using the middle column element with the minimum index, which due to ordering has the minimum energy
@@ -172,7 +174,7 @@ def RX_builder(workfolder,data):
 
 	# the units of this energy are kcal/mol from MOPAC (LL) and hartree from G09 (HL)
 	if ("LL" in workfolder):
-		network_info["e_units"] = "kcal"
+		network_info["e_units"] = "kcal/mol"
 	else:
 		network_info["e_units"] = "hartree"
 
@@ -182,22 +184,26 @@ def RX_builder(workfolder,data):
 	nodelist = []
 	edgelist = []
 	node_build_dict = {}
+
 	for tag,ndx in zip(data[0],data[1]):
-		# Skip cases starting with PROD for consistency
-		if (tag[1] == "PROD"):
-			continue
+		# Original implementation avoids routes starting with PROD: allow to keep them
 		# Prepare queries and analyze the right side which can be PROD or MIN, treated differently
 		ts_ii,side1_ii,side2_ii = ndx
 		qts,qm1,qm2 = ["WHERE id==%s" % ival for ival in ndx]
-		e_ts,geom_ts,freq_ts = [elem[0] for elem in query_all(dbts,qts,"ts")]
-		e_m1,geom_m1,freq_m1 = [elem[0] for elem in query_all(dbmin,qm1,"min")]
-		if (tag[2] == "PROD"):
-			e_m2,geom_m2,freq_m2 = [elem[0] for elem in query_all(dbprod,qm2,"prod")]
-		else:
-			# check for self-loops from MINx to MINx and remove them
-			if (side1_ii == side2_ii):
-				continue
-			e_m2,geom_m2,freq_m2 = [elem[0] for elem in query_all(dbmin,qm2,"min")]
+		e_ts,geom_ts,freq_ts = [elem[0] for elem in query_all(dbdict["ts"],qts,"ts")]
+		# use the lowercased tags as selectors for the DBs
+		sel_m1,sel_m2 = [sel.lower() for sel in tag[1:]]
+
+		if (sel_m2 == "prod" and orig_selec_mode):
+			# Skip cases starting with PROD for consistency IN original implementation
+			continue
+
+		e_m1,geom_m1,freq_m1 = [elem[0] for elem in query_all(dbdict[sel_m1],qm1,sel_m1)]
+		e_m2,geom_m2,freq_m2 = [elem[0] for elem in query_all(dbdict[sel_m2],qm2,sel_m2)]
+
+		# check for self-loops and remove them: CONTINUE if we have same index and same selector
+		if ((side1_ii == side2_ii) and (sel_m1 == sel_m2)):
+			continue
 
 		# Compute relative energies and generate consistent labels
 		relvals = [e - e_ref for e in [e_ts,e_m1,e_m2]]
