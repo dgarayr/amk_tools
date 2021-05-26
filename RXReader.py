@@ -205,8 +205,10 @@ def RX_builder(workfolder,data,orig_selec_mode=False):
 		if ((side1_ii == side2_ii) and (sel_m1 == sel_m2)):
 			continue
 
-		# Compute relative energies and generate consistent labels
+		# Compute relative energies and generate consistent labels: if we have hartree, convert
 		relvals = [e - e_ref for e in [e_ts,e_m1,e_m2]]
+		if (network_info["e_units"] == "hartree"):
+			relvals = [hartree_kcal*value for value in relvals]
 		labels = [name + str(ii) for name,ii in zip(tag,ndx)]
 		
 		# Construct energy dictionary and a full edge constructor with connections, name and energy parameters
