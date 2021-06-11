@@ -215,9 +215,12 @@ def RX_builder(workfolder,data,orig_selec_mode=False):
 		nn1,nn2 = labels[1:3]
 		# Dictionary updaters
 		if (nn1 not in node_build_dict.keys()):
+			freq_m1 = freq_m1.replace("\n",";")
 			nodelist.append((nn1,{"name":nn1,"energy":relvals[1],"geometry":geom_m1,"frequencies":freq_m1}))
 		if (nn2 not in node_build_dict.keys()):
+			freq_m2 = freq_m2.replace("\n",";")
 			nodelist.append((nn2,{"name":nn2,"energy":relvals[2],"geometry":geom_m2,"frequencies":freq_m2}))
+		freq_ts = freq_ts.replace("\n",";")
 		edgelist.append((nn1,nn2,{"name":labels[0],"energy":relvals[0],"geometry":geom_ts,"frequencies":freq_ts}))
 
 	# Now generate the graph and then add the corresponding node energies

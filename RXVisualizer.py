@@ -37,7 +37,7 @@ def generate_inline_mol_freqs(data_dict):
 	except:
 		return None
 	# we need to merge each displacement with the coordinates (and with a charge placeholder), and add the freq value as a comment
-	freqvals = frq.split("\n")
+	freqvals = frq.split(";")
 	coords = geo.split("\n")
 	Nat = len(coords)
 	displ_strings = [[" ".join(line) for line in dx] for dx in displ]
@@ -224,6 +224,8 @@ js_callback_dict = {
 			}
 			var ndx = rend.selected.indices[0]
 			var model = rend.data["model"][ndx]
+			var molname = rend.data["name"][ndx]
+			textField.text = "<font size=+1><b>" + molname + "</b></font>"
 			source.data["script"] = [model]
 			source.properties.data.change.emit()
 		}
@@ -231,7 +233,7 @@ js_callback_dict = {
 
 	"loadVibrations":"""
 		// from graph, we fetch nrend - node renderer, erend - edgerenderer, 
-		// source - source object for JSMol
+		// source - source object for JSMol, menu - dropdown menu to change vibrations
 		var nrend = graph.node_renderer.data_source
 		var erend = graph.edge_renderer.data_source
 		
@@ -245,8 +247,23 @@ js_callback_dict = {
 		var ndx = rend.selected.indices[0]
 		var vibr_models = rend.data["vibr_models"][ndx]
 		if (vibr_models.length){
-			source.data["script"] = [vibr_models + "; vibration on ; vibration scale 0.5"]
+			source.data["current_model"] = [vibr_models]
+			source.data["script"] = [vibr_models + "; vibration on ; vibration scale 0.25"]
+			source.data["current_mol"] = rend.data["name"][ndx]
+			// and also populate the normal mode dropdown: get the frequencies and assign them to menu
+			// we must pass indices as strings for it to work, add 1 to match model numbering
+			menu.disabled = false
+			var freqlist = rend.data["frequencies"][0].split(";")
+			var menulist = freqlist.map(function (frq,ii) {return [frq+" cm-1",(ii+1).toString()]})
+			menu.menu = menulist
+			var nw_label = "Normal modes (" + source.data["current_mol"] + ")"
+			menu.label = nw_label
+			// modify text element using the BASE frequency
+			var molname = source.data["current_mol"]
+			var frqval = freqlist[1].toString() + " cm-1"
+			textField.text = "<font size=+1><b>" + molname + " (" + frqval + ")" + "</b></font>"
 		}
+	
 		source.properties.data.change.emit()
 		""",
 
@@ -298,6 +315,17 @@ js_callback_dict = {
 			fig.y_range.start = positions[1] - 1.0
 			fig.y_range.end = positions[1] + 1.0
 		}
+		""",
+
+		"chooseVibrationMenu":"""
+		// source - source object for JSMol ; menu - dropdown menu object
+		source.data["script"] = [source.data["current_model"] + "; vibration on ; vibration scale 0.25 ; model " + this.item]
+		var ndx = parseInt(this.item) - 1
+		var molname = source.data["current_mol"]
+		var frqval = menu.menu[ndx][0]
+		source.data["current_vibration"] = frqval
+		textField.text = "<font size=+1><b>" + molname + " (" + frqval + ")" + "</b></font>"
+		source.properties.data.change.emit()
 		"""
 }
 
@@ -361,13 +389,31 @@ def full_view_layout(bokeh_figure,bokeh_graph,py_callbacks=True):
 	# Instantiate the applet
 	info,app,script_source = generate_applet()
 
+	# Instantiate the required widgets: buttons, text inputs, menus...
+	b1 = bkm.Button(label="Load vibrations",width=100) 
+	b2 = bkm.Button(label="Geometry to clipboard",width=100)
+	text_input = bkm.TextInput(value=nodesource.data["name"][0],width_policy="fit")
+	b3 = bkm.Button(label="Locate molecule",width_policy="fit")
+	menu = bkm.Dropdown(label="Normal modes",menu=[("No vibr. loaded","None"),None],disabled=True,width=200)
+	spc1 = bkm.Spacer(width=650)
+	text = bkm.Div(text="",width=300)
+
 	# Write the JavaScript callback to allow to avoid the Bokeh server: all is ported to JavaScript
 	# For this to work, we need to pre-load all models in the graph
-	js_load_mol = bkm.CustomJS(args = {"graph":bokeh_graph,"source":script_source}, 
+	js_load_mol = bkm.CustomJS(args = {"graph":bokeh_graph,"source":script_source,"textField":text}, 
 							   code = js_callback_dict["loadMolecule"])
 
-	js_load_vibrations = bkm.CustomJS(args = {"graph":bokeh_graph,"source":script_source}, 
+	js_load_vibrations = bkm.CustomJS(args = {"graph":bokeh_graph,"source":script_source,"menu":menu,"textField":text}, 
 									  code = js_callback_dict["loadVibrations"])
+
+	js_geo_clipboard = bkm.CustomJS(args = {"graph":bokeh_graph,"source":script_source,'button':b2}, 
+									code = js_callback_dict["molToClipboard"])
+
+	js_mol_locator = bkm.CustomJS(args = {"graph":bokeh_graph,"fig":bokeh_figure,"text_input":text_input},
+								  code = js_callback_dict["locateMolecule"])
+	
+	js_menu_selector = bkm.CustomJS(args = {"source":script_source,"menu":menu,"textField":text},
+					 			    code = js_callback_dict["chooseVibrationMenu"])
 
 	# Set up the callbacks for nodes and edges, either from Python or from JS
 	if (py_callbacks):
@@ -376,28 +422,26 @@ def full_view_layout(bokeh_figure,bokeh_graph,py_callbacks=True):
 	else:
 		bokeh_graph.node_renderer.data_source.selected.js_on_change('indices',js_load_mol)
 		bokeh_graph.edge_renderer.data_source.selected.js_on_change('indices',js_load_mol)
-	# Prepare the button to load vibrations on a selected structure
-	b1 = bkm.Button(label="Load vibration")
+
+	# Widget callbacks
+	# Button 1: load vibrational models
 	if (py_callbacks):
 		b1.on_click(load_vibration)
 	else:
 		b1.js_on_click(js_load_vibrations)
-
-	# Button to pass current geometry to clipboard
-	b2 = bkm.Button(label="Geometry to clipboard")
-	# use same logic as for loading vibrations 
-	js_geo_clipboard = bkm.CustomJS(args = {"graph":bokeh_graph,"source":script_source,'button':b2}, 
-									code = js_callback_dict["molToClipboard"])
+	
+	# Button 2: pass current geometry to clipboard
 	b2.js_on_click(js_geo_clipboard)
 	
 	# Allow to select by name
-	text_input = bkm.TextInput(value=nodesource.data["name"][0])
-	b3 = bkm.Button(label="Locate molecule")
-	js_mol_locator = bkm.CustomJS(args = {"graph":bokeh_graph,"fig":bokeh_figure,"text_input":text_input},
-								  code = js_callback_dict["locateMolecule"])
 	b3.js_on_click(js_mol_locator)
-	# Dispose the layout: graph at left, column with JSMol and buttons right
-	button_box = bkm.Column(bkm.Row(b1,b2),bkm.Row(text_input,b3))
-	col2 = bkm.Column(app,button_box)
-	layout = bokeh.layouts.gridplot([bokeh_figure,col2],ncols=2)
+
+	# Vibration selector
+	menu.js_on_event("menu_item_click",js_menu_selector)
+	
+	# Layout: left column with network and locator, right row with buttons for JSMol control
+	# Row-based layout???
+	row1 = bkm.Row(b1,menu,b2,spc1,text)
+	row2 = bkm.Row(bkm.Column(bokeh_figure,bkm.Row(text_input,b3)),app)
+	layout = bokeh.layouts.grid([row1,row2])
 	return layout
