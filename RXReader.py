@@ -487,11 +487,6 @@ def full_profile(G,startnode):
 		list_labels += nw_labels
 		update_flag = np.any(current_state)    
 		next_nodes = next_gen
-	# Unit handling
-	unit_change = G.graph["e_units"] == "hartree"
-	if (unit_change):
-		for prof in list_profiles:
-			prof[:,1] *= hartree_kcal
 	return list_profiles,list_labels
 
 def profplotter(arrlist,lablist,put_energy=False,figsize=(10,10)):

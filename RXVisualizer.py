@@ -260,7 +260,7 @@ js_callback_dict = {
 			menu.label = nw_label
 			// modify text element using the BASE frequency
 			var molname = source.data["current_mol"]
-			var frqval = freqlist[1].toString() + " cm-1"
+			var frqval = freqlist[1].toString().trim() + " cm-1"
 			textField.text = "<font size=+1><b>" + molname + " (" + frqval + ")" + "</b></font>"
 		}
 	
@@ -324,7 +324,7 @@ js_callback_dict = {
 		var molname = source.data["current_mol"]
 		var frqval = menu.menu[ndx][0]
 		source.data["current_vibration"] = frqval
-		textField.text = "<font size=+1><b>" + molname + " (" + frqval + ")" + "</b></font>"
+		textField.text = "<font size=+1><b>" + molname + " (" + frqval.trim() + ")" + "</b></font>"
 		source.properties.data.change.emit()
 		"""
 }
