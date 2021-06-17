@@ -253,14 +253,14 @@ js_callback_dict = {
 			// and also populate the normal mode dropdown: get the frequencies and assign them to menu
 			// we must pass indices as strings for it to work, add 1 to match model numbering
 			menu.disabled = false
-			var freqlist = rend.data["frequencies"][0].split(";")
+			var freqlist = rend.data["frequencies"][ndx].split(";")
 			var menulist = freqlist.map(function (frq,ii) {return [frq+" cm-1",(ii+1).toString()]})
 			menu.menu = menulist
 			var nw_label = "Normal modes (" + source.data["current_mol"] + ")"
 			menu.label = nw_label
 			// modify text element using the BASE frequency
 			var molname = source.data["current_mol"]
-			var frqval = freqlist[1].toString().trim() + " cm-1"
+			var frqval = freqlist[0].toString().trim() + " cm-1"
 			textField.text = "<font size=+1><b>" + molname + " (" + frqval + ")" + "</b></font>"
 		}
 	
