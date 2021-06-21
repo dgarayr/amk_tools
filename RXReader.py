@@ -80,7 +80,7 @@ def query_all(dbcursor,filterstruc,tablename,add_zpe=False):
 	- tablename. String, name of the table in the SQL file.
 	- add_zpe. Boolean, if True, sum zero-point vibrational energy to the energy results
 	Output:
-	(In principle it is expected to have one-element queries, but we return lsits for safety)
+	(In principle it is expected to have one-element queries, but lists are returned for safety)
 	- energies. List of floats containing queried energies. 
 	- geometry. List of strings containing newline-separated blocks for Cartesian coordinates of a molecule.
 	- frequencies. List of strings containing newline-separated blocks for all frequency values of a molecule
