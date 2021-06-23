@@ -52,6 +52,11 @@ def molden_vibration_parser(moldenfile):
 	return freqs,coords,displacements
 
 # Querying functions
+# Using a dictionary allows to change the queried fields for ts, min or prod
+query_dict = {"ts":"SELECT energy,zpe,geom,freq,lname FROM ts ",
+		    "min":"SELECT energy,zpe,geom,freq,lname FROM min ",
+			"prod":"SELECT energy,zpe,geom,freq,name,formula FROM prod "}
+
 def query_energy(dbcursor,filterstruc,tablename,add_zpe=False):
 	'''Get energy and ZPEs from a SQL table and sum them.
 	Input:
@@ -86,7 +91,8 @@ def query_all(dbcursor,filterstruc,tablename,add_zpe=False):
 	- frequencies. List of strings containing newline-separated blocks for all frequency values of a molecule
 	- 
 	'''
-	qtemp = "SELECT energy,zpe,geom,freq FROM %s " % tablename
+	# Name field depends on the situation
+	qtemp = query_dict[tablename]
 	if (filterstruc):
 		qtemp += filterstruc
 	matches = dbcursor.execute(qtemp).fetchall()
@@ -96,7 +102,9 @@ def query_all(dbcursor,filterstruc,tablename,add_zpe=False):
 		energies = [match[0] for match in matches]
 	geometry = [match[2] for match in matches]
 	frequencies = [match[3] for match in matches]
-	return energies,geometry,frequencies
+	names = [match[4] for match in matches]
+	# Include the formula for products?
+	return energies,geometry,frequencies,names
 
 # Reaction network reading
 def RX_parser(workfolder,rxnfile="RXNet"):
@@ -190,7 +198,7 @@ def RX_builder(workfolder,data,orig_selec_mode=False):
 		# Prepare queries and analyze the right side which can be PROD or MIN, treated differently
 		ts_ii,side1_ii,side2_ii = ndx
 		qts,qm1,qm2 = ["WHERE id==%s" % ival for ival in ndx]
-		e_ts,geom_ts,freq_ts = [elem[0] for elem in query_all(dbdict["ts"],qts,"ts")]
+		e_ts,geom_ts,freq_ts,fname_ts = [elem[0] for elem in query_all(dbdict["ts"],qts,"ts")]
 		# use the lowercased tags as selectors for the DBs
 		sel_m1,sel_m2 = [sel.lower() for sel in tag[1:]]
 
@@ -198,8 +206,8 @@ def RX_builder(workfolder,data,orig_selec_mode=False):
 			# Skip cases starting with PROD for consistency IN original implementation
 			continue
 
-		e_m1,geom_m1,freq_m1 = [elem[0] for elem in query_all(dbdict[sel_m1],qm1,sel_m1)]
-		e_m2,geom_m2,freq_m2 = [elem[0] for elem in query_all(dbdict[sel_m2],qm2,sel_m2)]
+		e_m1,geom_m1,freq_m1,fname_m1 = [elem[0] for elem in query_all(dbdict[sel_m1],qm1,sel_m1)]
+		e_m2,geom_m2,freq_m2,fname_m2 = [elem[0] for elem in query_all(dbdict[sel_m2],qm2,sel_m2)]
 
 		# check for self-loops and remove them: CONTINUE if we have same index and same selector
 		if ((side1_ii == side2_ii) and (sel_m1 == sel_m2)):
@@ -216,12 +224,12 @@ def RX_builder(workfolder,data,orig_selec_mode=False):
 		# Dictionary updaters
 		if (nn1 not in node_build_dict.keys()):
 			freq_m1 = freq_m1.replace("\n",";")
-			nodelist.append((nn1,{"name":nn1,"energy":relvals[1],"geometry":geom_m1,"frequencies":freq_m1}))
+			nodelist.append((nn1,{"name":nn1,"energy":relvals[1],"geometry":geom_m1,"frequencies":freq_m1,"fname":fname_m1}))
 		if (nn2 not in node_build_dict.keys()):
 			freq_m2 = freq_m2.replace("\n",";")
-			nodelist.append((nn2,{"name":nn2,"energy":relvals[2],"geometry":geom_m2,"frequencies":freq_m2}))
+			nodelist.append((nn2,{"name":nn2,"energy":relvals[2],"geometry":geom_m2,"frequencies":freq_m2,"fname":fname_m2}))
 		freq_ts = freq_ts.replace("\n",";")
-		edgelist.append((nn1,nn2,{"name":labels[0],"energy":relvals[0],"geometry":geom_ts,"frequencies":freq_ts}))
+		edgelist.append((nn1,nn2,{"name":labels[0],"energy":relvals[0],"geometry":geom_ts,"frequencies":freq_ts,"fname":fname_ts}))
 
 	# Now generate the graph and then add the corresponding node energies
 	G = nx.Graph()
