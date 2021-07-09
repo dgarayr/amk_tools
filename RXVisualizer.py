@@ -310,10 +310,10 @@ js_callback_dict = {
 		if (ndx >= 0) {
 			nrend.selected.indices = [ndx]
 			var positions = layout[mol_query]
-			fig.x_range.start = positions[0] - 1.0
-			fig.x_range.end = positions[0] + 1.0
-			fig.y_range.start = positions[1] - 1.0
-			fig.y_range.end = positions[1] + 1.0
+			fig.x_range.start = positions[0] - 0.5
+			fig.x_range.end = positions[0] + 0.5
+			fig.y_range.start = positions[1] - 0.5
+			fig.y_range.end = positions[1] + 0.5
 		}
 		""",
 
