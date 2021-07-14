@@ -298,18 +298,35 @@ js_callback_dict = {
 
 		"locateMolecule":"""
 		// source - source object for JSMol
-		// from graph, we fetch nrend (node renderer), erend and layout
+		// pass graph and fetch node and edge renderers
 		// from fig, we modify x_range and y_range. Default plot starts from -1.2 to 1.2,
 		var nrend = graph.node_renderer.data_source
+		var erend = graph.edge_renderer.data_source
 		var layout = graph.layout_provider.graph_layout
-		// fetch the query in the data sources
+		// fetch the query in the data sources, choosing the appropiate renderer depending on the query
 		var mol_query = text_input.value
-		var all_names = nrend.data["name"]
-		var ndx = all_names.indexOf(mol_query)
+		if (mol_query.includes("TS")) {
+			var renderer = erend
+		} else {
+			var renderer = nrend
+		}
+		var pool_names = renderer.data["name"]
+		var ndx = pool_names.indexOf(mol_query)
+		// locate positions of the node or of the nodes defining an edge
+		if (mol_query.includes("TS")) {
+			var n1 = renderer.data["start"][ndx]
+			var n2 = renderer.data["end"][ndx]
+			var pos1 = layout[n1]
+			var pos2 = layout[n2]
+			var positions = new Array(2)
+			positions[0] = 0.5*(pos1[0]+pos2[0])
+			positions[1] = 0.5*(pos1[1]+pos2[1])
+		} else {
+			var positions = layout[mol_query]
+		}
 		// returns -1 if element is not present
 		if (ndx >= 0) {
-			nrend.selected.indices = [ndx]
-			var positions = layout[mol_query]
+			renderer.selected.indices = [ndx]
 			fig.x_range.start = positions[0] - 0.5
 			fig.x_range.end = positions[0] + 0.5
 			fig.y_range.start = positions[1] - 0.5
