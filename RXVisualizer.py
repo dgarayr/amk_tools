@@ -197,9 +197,28 @@ def bokeh_network_view(G,positions=None,width=800,height=600):
 	# and add the two renderers (nodes & edges) explicitly to the constructor. 
 	Gbok.inspection_policy = bkm.EdgesAndLinkedNodes()
 	# Select the fields to be shown (with @) and optionally add formatting between curly braces
-	tooltips = [("tag","@name"),("E","@energy{%.2f}")]
-	hovering = bkm.HoverTool(tooltips=tooltips,formatters={"@energy":"printf"},renderers=[Gbok.node_renderer,Gbok.edge_renderer])
-	bfig.add_tools(hovering)
+
+	# Custom JS selector for node hovering to have the formula field in the products
+	hoverJS = '''
+	var nrend = graph.node_renderer.data_source
+	if (cb_data.index.indices.length > 0) {
+		var ndx = cb_data.index.indices[0]
+		var formula_list = nrend.data["formula"]
+		var formula = formula_list[ndx]
+		if (!formula){
+		hover.tooltips = [["tag","@name"],["E","@energy{%.2f}"]]
+ 		} else {
+		hover.tooltips = [["tag","@name"],["E","@energy{%.2f}"],["formula","@formula"]]
+		}
+	}
+	'''
+
+	hover_node = bkm.HoverTool(description="Node hover",renderers=[Gbok.node_renderer],formatters={"@energy":"printf"})
+	hover_node.callback = bkm.CustomJS(args=dict(hover=hover_node,graph=Gbok),code=hoverJS)
+	hover_edge = bkm.HoverTool(description="Edge hover",tooltips=[("tag","@name"),("E","@energy{%.2f}")],formatters={"@energy":"printf"},renderers=[Gbok.edge_renderer])
+
+	bfig.add_tools(hover_node)
+	bfig.add_tools(hover_edge)
 
 	Gbok.selection_policy = bkm.EdgesAndLinkedNodes()
 	tap = bkm.TapTool(renderers=[Gbok.node_renderer,Gbok.edge_renderer])
