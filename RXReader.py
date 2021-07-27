@@ -507,7 +507,10 @@ def node_synonym_search(G,nodelist):
 	standard_nodes = []
 	for item in nodelist:
 		if (isinstance(item,list)):
-			nodes = item
+			nodes = [formula_locator(G,entry) if "+" in entry else entry for entry in item]
+			# and we want to flatten
+			flat_nodes = [element for entry in nodes for element in entry]
+			nodes = flat_nodes
 		else:
 			if ("+" in item):
 				nodes = formula_locator(G,item)
@@ -532,7 +535,8 @@ def single_path_finder(G,source,target,cutoff,skip_int_frags=True):
 	for path in nx.all_simple_paths(G,source=source,target=target,cutoff=cutoff):
 		# Exclude paths that go through products: we only want these that only pass through minima
 		interm_elements = path[1:-1]
-		if ("PROD" in interm_elements and skip_int_frags):
+		prod_loc = ["PROD" in elem for elem in interm_elements]
+		if (np.any(prod_loc) and skip_int_frags):
 			continue
 		valid_path_list.append(path)
 	return valid_path_list
@@ -839,3 +843,4 @@ def theor_profile_plotter(G,profile_list,figsize=(10,10),cmap="tab10"):
 			evalue = "%.2f" % loc[1]
 			ax.annotate(evalue,[loc[0],loc[1]-yshift],horizontalalignment='center',verticalalignment='top').draggable()
 	return fig,ax	
+
