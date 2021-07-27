@@ -605,7 +605,7 @@ def graph_path_selector(G,path_list):
 	# Get all unique nodes belonging to the paths and generate the subgraph
 	selected_nodes = [node for path in path_list for node in path]
 	unique_nodes = list(set(selected_nodes))
-	Gsub = G.subgraph(unique_nodes)
+	Gsub = G.subgraph(unique_nodes).copy()
 	fmap = formula_dict_constructor(Gsub)
 	# Set the list of paths as a graph property, including the transition states
 	#Gsub.graph["path_list"] = path_reformatter(G,path_list)
