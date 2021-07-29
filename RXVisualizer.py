@@ -36,6 +36,9 @@ def generate_inline_mol_freqs(data_dict):
 		displ = data_dict["vibr_displace"]
 	except:
 		return None
+	# Handle cases where the edge has no info
+	if (not (geo and frq and displ)):
+		return None
 	# we need to merge each displacement with the coordinates (and with a charge placeholder), and add the freq value as a comment
 	freqvals = frq.split(";")
 	coords = geo.split("\n")
@@ -78,9 +81,12 @@ def add_models(G):
 
 	for ed in G.edges(data=True):
 		geo = ed[2]["geometry"]
-		xyz = xyz_from_atoms(geo,comment=ed[2]["name"])
-		ed[2]["model"] = generate_inline_mol(xyz)
-
+		# Do not fail when there are empty blocks (e.g. for barrierless transition states)
+		if (geo):
+			xyz = xyz_from_atoms(geo,comment=ed[2]["name"])
+			ed[2]["model"] = generate_inline_mol(xyz)
+		else:
+			ed[2]["model"] = None
 	return None
 
 def add_vibr_models(G):
@@ -98,6 +104,7 @@ def add_vibr_models(G):
 		nd[1]["vibr_models"] = model_freq_block
 
 	for ed in G.edges(data=True):
+		# Do not fail when there are empty blocks (e.g. for barrierless transition states)
 		model_freq_block = generate_inline_mol_freqs(ed[2])
 		ed[2]["vibr_models"] = model_freq_block
 

@@ -70,7 +70,7 @@ query_dict = {"ts":"SELECT energy,zpe,geom,freq,lname FROM ts ",
 			"min":"SELECT energy,zpe,geom,freq,lname FROM min ",
 			"prod":"SELECT energy,zpe,geom,freq,name,formula FROM prod "}
 
-def query_energy(dbcursor,filterstruc,tablename,add_zpe=False):
+def query_energy(dbcursor,filterstruc,tablename,add_zpe=True):
 	'''Get energy and ZPEs from a SQL table and sum them.
 	Input:
 	- dbcursor. SQLite3 cursor for a DB connection.
@@ -90,13 +90,14 @@ def query_energy(dbcursor,filterstruc,tablename,add_zpe=False):
 		energies = [match[0] for match in matches]
 	return energies
 
-def query_all(dbcursor,filterstruc,tablename,add_zpe=False,multi_query=False):
+def query_all(dbcursor,filterstruc,tablename,add_zpe=True,e_units="kcal/mol",multi_query=False):
 	'''Get energy and ZPEs from a SQL table and sum them
 	Input:
 	- dbcursor. SQLite3 cursor for a DB connection.
 	- filterstruc. String, SQL statement of the type WHERE to filter a given entry
 	- tablename. String, name of the table in the SQL file.
 	- add_zpe. Boolean, if True, sum zero-point vibrational energy to the energy results.
+	- e_units. String, units of the "energy" field, either "kcal/mol" or "hartree".
 	- multi_query. Boolean, if True, several elements are expected to be queried, and will be returned as lists. Else,
 	a single element will be returned, corresponding to the first match of the query.
 	Output:
@@ -113,10 +114,17 @@ def query_all(dbcursor,filterstruc,tablename,add_zpe=False,multi_query=False):
 	if (filterstruc):
 		qtemp += filterstruc
 	matches = dbcursor.execute(qtemp).fetchall()
+	# extract energies and handle units here
+	e_elec = np.array([match[0] for match in matches])
+	if (e_units == "hartree"):
+		e_elec *= hartree_kcal
 	if (add_zpe):
-		energies = [sum(match[0:2]) for match in matches]
+		# ZPE is always in kcal/mol. If energies are in hartree, convert them.
+		zpe = np.array([match[1] for match in matches])
+		energies = list(e_elec + zpe)
 	else:
-		energies = [match[0] for match in matches]
+		energies = list(e_elec)
+
 	geometry = [match[2] for match in matches]
 	frequencies = [match[3] for match in matches]
 	names = [match[4] for match in matches]
@@ -146,7 +154,11 @@ def RX_parser(workfolder,rxnfile="RXNet",check_connection=False):
 	- data. List of lists, containing the tags and indices of the node - edge - node pairs in the reaction
 	network required to build the corresponding graph'''
 	froute = "%s/%s" % (workfolder,rxnfile)
+	# Flag barrierless networks so we do not wrongly assign a TS tag
+	# Use negative integers for the index and TSb as label instead of TS
+	barrierless = "barrless" in rxnfile
 	with open(froute,"r") as frxn:
+		tstag = "TS"    
 		# Structure of the file: TS, DE value and rxn path
 		# Four possible path heuristics:
 		# MIN x <--> MIN y
@@ -188,6 +200,9 @@ def RX_parser(workfolder,rxnfile="RXNet",check_connection=False):
 			else:
 				m2 = int(rightside[0].strip(":").replace("PR",""))
 				t2 = "PROD"
+			if (barrierless):
+				tstag = "TSb"
+				ts = -ts
 			tags.append(["TS",t1,t2])
 			indices.append([ts,m1,m2])
 		# fetch tags MIN/TS/PROD and the corresponding indices for each 
@@ -209,7 +224,7 @@ def dict_updater(indict,efield,namefield):
 	outdict.update({k:v for k,v in indict.items() if k not in ["energy","frequencies"]})
 	return outdict
 
-def RX_builder(workfolder,data,orig_selec_mode=False):
+def RX_builder(workfolder,data,orig_selec_mode=False,add_zpe=True):
 	'''From the connectivity data parsed in RX_parser(), generate the graph structure and querying information from the corresponding 
 	SQL databases to add information (energy, geometry and lists of frequencies) to the network. Relative energies are also computed here,
 	taking the lowest-energy intermediate as reference.
@@ -230,17 +245,19 @@ def RX_builder(workfolder,data,orig_selec_mode=False):
 	dbconnections = [sqlite3.connect(db,uri=True) for db in dbnames]
 	dbmin,dbts,dbprod = [dbcon.cursor() for dbcon in dbconnections]
 	dbdict = {"min":dbmin, "ts":dbts, "prod":dbprod}
-	
+
+	# the units for the energy are kcal/mol from MOPAC (LL) and hartree from G09 (HL)
+	if ("LL" in workfolder):
+		e_units = "kcal/mol"
+	else:
+		e_units = "hartree"
+
+	# as query_all() handles all energy conversions, units in the graph will always be kcal/mol
+	network_info["e_units"] = "kcal/mol"
 	# We first need to have a energy reference: for consistency with the original implementation,
 	# we will be using the middle column element with the minimum index, which due to ordering has the minimum energy
 	smin = min([entry[1] for entry in data[1]])
-	e_ref = query_energy(dbmin,"WHERE id==%s" % smin,"min")[0]
-
-	# the units of this energy are kcal/mol from MOPAC (LL) and hartree from G09 (HL)
-	if ("LL" in workfolder):
-		network_info["e_units"] = "kcal/mol"
-	else:
-		network_info["e_units"] = "hartree"
+	e_ref = query_all(dbmin,"WHERE id==%s" % smin,"min",add_zpe=add_zpe,e_units=e_units)["energy"]
 
 	# save in output dict
 	network_info.update({"ref_struc":"MIN%d" % smin, "ref_energy":e_ref})
@@ -253,33 +270,41 @@ def RX_builder(workfolder,data,orig_selec_mode=False):
 		# Original implementation avoids routes starting with PROD: allow to keep them
 		# Prepare queries and analyze the right side which can be PROD or MIN, treated differently
 		ts_ii,side1_ii,side2_ii = ndx
-		qts,qm1,qm2 = ["WHERE id==%s" % ival for ival in ndx]
-		#e_ts,geom_ts,freq_ts,fname_ts = [elem[0] for elem in query_all(dbdict["ts"],qts,"ts")]
-		data_ts = query_all(dbdict["ts"],qts,"ts")
-		e_ts = data_ts["energy"]
-
+		# In the queries, check for POSITIVE indices, else we will be in a barrierless case
+		qts,qm1,qm2 = ["WHERE id==%s" % ival if ival >= 0 else None for ival in ndx]
+		if (qts):
+			data_ts = query_all(dbdict["ts"],qts,"ts",add_zpe=add_zpe,e_units=e_units)
+			e_ts = data_ts["energy"]
+			barrierless = False
+		else:
+			# Check barrierless transition states so we do not assign anything to this edge apart from the name
+			barrierless = True
+			data_ts = {"name":"TSb_%d" % abs(ndx[0])}
+		data_ts["barrless"] = barrierless
 		# use the lowercased tags as selectors for the DBs
 		sel_m1,sel_m2 = [sel.lower() for sel in tag[1:]]
 
 		if (sel_m2 == "prod" and orig_selec_mode):
 			# Skip cases starting with PROD for consistency IN original implementation
 			continue
-		data_m1 = query_all(dbdict[sel_m1],qm1,sel_m1)
-		e_m1 = data_m1["energy"]
-		data_m2 = query_all(dbdict[sel_m2],qm2,sel_m2)
-		e_m2 = data_m2["energy"]
-		
-		#e_m1,geom_m1,freq_m1,fname_m1 = [elem[0] for elem in query_all(dbdict[sel_m1],qm1,sel_m1)]
-		#e_m2,geom_m2,freq_m2,fname_m2 = [elem[0] for elem in query_all(dbdict[sel_m2],qm2,sel_m2)]
 
+		data_m1 = query_all(dbdict[sel_m1],qm1,sel_m1,add_zpe=add_zpe,e_units=e_units)
+		e_m1 = data_m1["energy"]
+		data_m2 = query_all(dbdict[sel_m2],qm2,sel_m2,add_zpe=add_zpe,e_units=e_units)
+		e_m2 = data_m2["energy"]
+
+		# assign m2 energy to barrierless TSs
+		if (barrierless):
+			e_ts = max(e_m1,e_m2)
+			data_ts["energy"] = max(e_m1,e_m2)
+			data_ts["frequencies"] = None
+			data_ts["geometry"] = None
 		# check for self-loops and remove them: CONTINUE if we have same index and same selector
 		if ((side1_ii == side2_ii) and (sel_m1 == sel_m2)):
 			continue
 
-		# Compute relative energies and generate consistent labels: if we have hartree, convert
+		# Compute relative energies and generate consistent labels: unit handling is done at query_all()
 		relvals = [e - e_ref for e in [e_ts,e_m1,e_m2]]
-		if (network_info["e_units"] == "hartree"):
-			relvals = [hartree_kcal*value for value in relvals]
 		labels = [name + str(ii) for name,ii in zip(tag,ndx)]
 		
 		# Construct energy dictionary and a full edge constructor with connections, name and energy parameters
@@ -289,7 +314,12 @@ def RX_builder(workfolder,data,orig_selec_mode=False):
 			nodelist.append((nn1,dict_updater(data_m1,relvals[1],nn1)))
 		if (nn2 not in node_build_dict.keys()):
 			nodelist.append((nn2,dict_updater(data_m2,relvals[2],nn2)))
-		edgelist.append((nn1,nn2,dict_updater(data_ts,relvals[0],labels[0])))
+		# For edges, consider possible barrierless cases
+		if (barrierless):
+			data_ts["energy"] = relvals[0]
+			edgelist.append((nn1,nn2,data_ts))
+		else:
+			edgelist.append((nn1,nn2,dict_updater(data_ts,relvals[0],labels[0])))
 
 	# Now generate the graph and then add the corresponding node energies
 	G = nx.Graph()
@@ -326,12 +356,16 @@ def vibr_displ_parser(workfolder,G,Nmodes=-1):
 			nd[1]["vibr_displace"] = displ[0:Nmodes]
 
 	for ed in G.edges(data=True):
-		tsid = int(ed[2]["name"].replace("TS",""))
-		nm_file = nm_folder + "/TS%04d.molden" % tsid
-		frq,coords,displ = molden_vibration_parser(nm_file)
-		frq_block = [str(frqval) for frqval in frq[0:Nmodes]]
-		ed[2]["frequencies"] = ";".join(frq_block)
-		ed[2]["vibr_displace"] = displ[0:Nmodes]
+		# Only proceed when there is data: skip edges without information such as barrierless TSs
+		if (ed[2]["geometry"]):
+			tsid = int(ed[2]["name"].replace("TS",""))
+			nm_file = nm_folder + "/TS%04d.molden" % tsid
+			frq,coords,displ = molden_vibration_parser(nm_file)
+			frq_block = [str(frqval) for frqval in frq[0:Nmodes]]
+			ed[2]["frequencies"] = ";".join(frq_block)
+			ed[2]["vibr_displace"] = displ[0:Nmodes]
+		else:
+			ed[2]["vibr_displace"] = None
 	return None
 
 def graph_plotter(G,posx=None):
@@ -414,7 +448,7 @@ def graph_plotter_interact(G,figsize=(10,10),posx=None):
 		ax.figure.canvas.draw_idle()
 		return ind
 	
-	# Unit checking	
+	# Unit checking 
 	unit_change = G.graph["e_units"] == "hartree"
 	note_track = {}
 	# Figure generation
@@ -822,7 +856,7 @@ def theor_profile_plotter(G,profile_list,figsize=(10,10),cmap="tab10"):
 	ax.set_frame_on(False)
 	ax.axes.get_xaxis().set_visible(False)
 	ax.get_yaxis().tick_left()
-	ax.axes.grid(b=True,which='both',linestyle='--',c="silver")		
+	ax.axes.grid(b=True,which='both',linestyle='--',c="silver")     
 
 	# System to keep track of labels that have been already been used in a certain position
 	# Save xpos and name in a dictionary and check before using the label
@@ -860,9 +894,9 @@ def theor_profile_plotter(G,profile_list,figsize=(10,10),cmap="tab10"):
 			elif (loc[0] in prev_xloc):
 				continue
 			# Add to dict and add labels to plot
-			label_tracking[text].append(loc[0])	
+			label_tracking[text].append(loc[0]) 
 			ax.annotate(text,loc,horizontalalignment='center',verticalalignment='bottom').draggable()
 			evalue = "%.2f" % loc[1]
 			ax.annotate(evalue,[loc[0],loc[1]-yshift],horizontalalignment='center',verticalalignment='top').draggable()
-	return fig,ax	
+	return fig,ax   
 
