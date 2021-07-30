@@ -224,6 +224,27 @@ def dict_updater(indict,efield,namefield):
 	outdict.update({k:v for k,v in indict.items() if k not in ["energy","frequencies"]})
 	return outdict
 
+def check_mininfo(workfolder):
+	'''Take the MINinfo file in workfolder and read it until the species with energy ZERO is reached, to fetch the
+	energy reference in AMK.
+	Input:
+	- workfolder. String, folder to read the MINinfo file from
+	Output:
+	- min. Integer, index of the reference minimum'''
+	# Use a try/except block in case there is no MINinfo file
+	try:
+		with open("%s/MINinfo" % workfolder,"r") as fmins:
+			next(fmins)			# skip 1st line
+			for line_raw in fmins:
+				line = line_raw.strip().split()
+				e = float(line[1])
+				if (abs(e) < 1E-8):
+					minstring = line[0].strip()
+					smin = float(minstring.replace("MIN",""))
+					return smin
+	except:
+		return None
+
 def RX_builder(workfolder,data,orig_selec_mode=False,add_zpe=True):
 	'''From the connectivity data parsed in RX_parser(), generate the graph structure and querying information from the corresponding 
 	SQL databases to add information (energy, geometry and lists of frequencies) to the network. Relative energies are also computed here,
@@ -255,8 +276,11 @@ def RX_builder(workfolder,data,orig_selec_mode=False,add_zpe=True):
 	# as query_all() handles all energy conversions, units in the graph will always be kcal/mol
 	network_info["e_units"] = "kcal/mol"
 	# We first need to have a energy reference: for consistency with the original implementation,
-	# we will be using the middle column element with the minimum index, which due to ordering has the minimum energy
-	smin = min([entry[1] for entry in data[1]])
+	# Check MINinfo and get the element whose energy is ZERO (energy reference consistent /w AMK)
+	# If MINinfo is not available, select the MIN with lowest index as fallback
+	smin = check_mininfo(workfolder)
+	if (not smin):
+		smin = min([entry[1] for entry in data[1]])
 	e_ref = query_all(dbmin,"WHERE id==%s" % smin,"min",add_zpe=add_zpe,e_units=e_units)["energy"]
 
 	# save in output dict
@@ -874,6 +898,13 @@ def theor_profile_plotter(G,profile_list,figsize=(10,10),cmap="tab10"):
 		edgenames = [G.edges[ed]["name"] for ed in edges]
 		prof_raw = [[nodes[jj],edgenames[jj]] for jj in range(len(edgenames))]
 		prof = [item for sublist in prof_raw for item in sublist] + [nodes[-1]]
+
+		# Barrierless TSs (TSb) shall be removed from prof and prof_energies
+		kept_ndx = [ii for ii,entry in enumerate(prof) if "TSb" not in entry]
+		prof_clean = [prof[ii] for ii in kept_ndx]
+		prof_energies_clean = [prof_energies[ii] for ii in kept_ndx]
+		prof = prof_clean
+		prof_energies = prof_energies_clean
 
 		# build XY array from the energies
 		xvals = np.arange(0,2*len(prof))
