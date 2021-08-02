@@ -274,7 +274,7 @@ def profile_datasourcer(G,profile_list):
 
 def profile_bokeh_plot(G,profile_list,condition=[]):
 	# Initialize figure
-	bfig = bokeh.plotting.Figure(width=800,height=600,tools="pan,wheel_zoom,box_zoom,reset,hover",name="PROFILE")
+	bfig = bokeh.plotting.Figure(width=600,height=600,tools="pan,wheel_zoom,box_zoom,reset,hover",name="PROFILE")
 	bfig.xaxis.visible = False
 	palette = bokeh.palettes.d3['Category10'][10]
 	# Generate the list of ColumnDataSources
@@ -291,7 +291,7 @@ def profile_bokeh_plot(G,profile_list,condition=[]):
 		rx_line = bfig.line(x='x',y="y",color=palette[cndx],source=cdspath)
 		# prepare labels
 		cds_lab = bkm.ColumnDataSource({k:cdspath.data[k][::2] for k in ["x","y","lab"]})
-		rx_label = bkm.LabelSet(x='x',y="y",text="lab",source=cds_lab,x_offset=0.5,y_offset=1)
+		rx_label = bkm.LabelSet(x='x',y="y",text="lab",source=cds_lab,x_offset=0.5,y_offset=1,name="THELABELS")
 		bfig.add_layout(rx_label)
 		### Add filtering: hide when filter condition is not fulfilled
 		rx_line.visible = condition[ii]
@@ -441,14 +441,50 @@ js_callback_dict = {
 
 		var data_col = layout.children[1][0].children[0]
 		var current_fig = layout.children[1][0].children[1]
-
-		if (current_fig.properties.name.spec.value == "PROFILE"){
-			var fig_array = [data_col,jsmol]
+		var current_plot = current_fig.children[0]
+		var controls = current_fig.children[1]
+		if (current_plot.properties.name.spec.value == "PROFILE"){
+			var side_array = [jsmol,controls]
 		} else {
-			var fig_array = [data_col,fig2]
+			var side_array = [fig2,controls]
 		}
-		//layout.children[1][0].children[1].children = fig_array
-		layout.children[1][0].children = fig_array
+		layout.children[1][0].children[1].children = side_array
+		""",
+
+		"selectProfile":"""
+		// pass graph and fetch node and edge renderers
+		// prof - bokeh figure for the profiles
+		var nrend = graph.node_renderer.data_source
+		var erend = graph.edge_renderer.data_source
+		
+		var ninds = nrend.selected.indices
+		var einds = erend.selected.indices
+		if (ninds.length) {
+			var rend = nrend
+		} else if (einds.length) {
+			var rend = erend
+		} else {
+			var rend = null
+			// and do not do anything else
+			return true
+		}
+		var ndx = rend.selected.indices[0]
+		var sel_spc = rend.data["name"][ndx]
+		console.log(prof)
+		// labels are stored in "center" property of the figure
+		for (let [index,line] of prof.renderers.entries()){
+			var current_data = line.data_source
+			var labels = current_data.data["lab"]
+			if (labels.includes(sel_spc)){
+				prof.renderers[index].visible = true
+				prof.center[index+2].visible = true
+			} else {
+				prof.renderers[index].visible = false
+				prof.center[index+2].visible = false
+			}
+			//line.data_source.data.change.emit()
+		prof.properties.renderers.change.emit()
+		}
 		"""
 }
 
@@ -516,22 +552,23 @@ def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsm
 	# Layout: left column with network and locator, right row with buttons for JSMol control
 	# Row-based layout???
 	row1 = bkm.Row(b1,menu,b2,spc1,text)
-	row2 = bkm.Row(bkm.Column(bokeh_figure,bkm.Row(text_input,b3,cbox)),app)
+	row2 = bkm.Row(bkm.Column(bokeh_figure,bkm.Row(text_input,b3)),bkm.Column(app))
 	layout = bokeh.layouts.grid([row1,row2])
 
 	#layout.children[1][0].children[0].children[0] = fig2
 	# Add options to see profiles if G was passed to the function
 	if (G and G.graph["path_list"]):
 		# Define elements (checkbox & button) and modify layout
-		
 		b4 = bkm.Button(label="Select",width=100)
-		layout.children[1][0].children[1] = bkm.Column(app,bkm.Row(cbox,b4))
+		layout.children[1][0].children[1].children.append(bkm.Row(cbox,b4))
 		# Generate the figure
 		fig_prof = profile_bokeh_plot(G,G.graph["path_list"])
 		# Button action has to be defined AFTER the layout
 		js_plot_modif = bkm.CustomJS(args = {"layout":layout,"fig1":bokeh_figure,"fig2":fig_prof,"jsmol":app}, 
 									 code = js_callback_dict["replacePlot"])
 		cbox.js_on_click(js_plot_modif)
-
+		js_select_profile = bkm.CustomJS(args = {"graph":bokeh_graph,"prof":fig_prof}, code = js_callback_dict["selectProfile"])
+		b4.js_on_click(js_select_profile)
+		return layout,fig_prof
 	# Optional: path highlighting
 	return layout

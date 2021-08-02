@@ -639,8 +639,6 @@ def poly_path_finder(G,source_collection,target_collection,cutoff,skip_int_frags
 	all_paths = []
 	for comb in combination_list:
 		current_paths = single_path_finder(G,source=comb[0],target=comb[1],cutoff=cutoff,skip_int_frags=skip_int_frags)
-		
-		print("PX",current_paths)
 		all_paths.extend(current_paths)
 	return all_paths
 
