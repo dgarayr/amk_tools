@@ -1,7 +1,9 @@
 import bokeh.plotting
+import bokeh.palettes
 import bokeh.models as bkm
 import bokeh.transform
 import bokeh.layouts
+import RXReader as arx
 from jsmol_bokeh_extension import JSMol
 import networkx as nx
 import numpy as np
@@ -245,6 +247,58 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 
 	return bfig,Gbok
 
+def dummybokehplot():
+	bfig = bokeh.plotting.Figure(title="DUMMY",width=800,height=600,tools="pan,wheel_zoom,box_zoom,reset",name="DUMMY")
+	circle = bfig.circle([1,2,3], [4,5,6])
+	#bfig.renderers.append([circle])
+	return bfig
+
+def profile_datasourcer(G,profile_list):
+	'''Convert a list of profiles (obtained through arx.theor_profile_builder(), arx.theor_cycle_branch_builder(), or
+	arx.poly_path_finder()) to a list of ColumnDataSource objects that can be used by Bokeh, with the structure
+	ii | jj | energy | label, where ii is the index of the profile and jj the order of the species'''
+	cds_list = []
+	for ii,prof in enumerate(profile_list):
+		# Filter out barrierless TS 
+		kept_ndx = [ii for ii,entry in enumerate(prof) if "TSb" not in entry]
+		working_prof = [prof[ii] for ii in kept_ndx]
+		# Prepare the lines, as in arx.theor_profile_plotter(), duplicating entries
+		xvals = np.arange(0,2*len(prof))
+		energies = [arx.simple_prop_fetch(G,entry,"energy") for entry in working_prof]
+		yvals = [e for evalue in energies for e in (evalue,evalue)]
+		labels = [lab for labvalue in working_prof for lab in (labvalue,labvalue)]
+		# save as ColumnDataSource
+		prof_cds = bkm.ColumnDataSource(data={"x":xvals,"y":yvals,"lab":labels})
+		cds_list.append(prof_cds)
+	return cds_list
+
+def profile_bokeh_plot(G,profile_list,condition=[]):
+	# Initialize figure
+	bfig = bokeh.plotting.Figure(width=800,height=600,tools="pan,wheel_zoom,box_zoom,reset,hover")
+	bfig.xaxis.visible = False
+	palette = bokeh.palettes.d3['Category10'][10]
+	# Generate the list of ColumnDataSources
+	cds_paths = profile_datasourcer(G,profile_list)
+
+	# Check condition
+	if (len(condition) != len(profile_list)):
+		condition = [True for prof in profile_list]
+
+	# Iterate & plot
+	for ii,cdspath in enumerate(cds_paths):
+		Nentries = len(cdspath.data["lab"])
+		cndx = (ii % 10)
+		rx_line = bfig.line(x='x',y="y",color=palette[cndx],source=cdspath)
+		# prepare labels
+		cds_lab = bkm.ColumnDataSource({k:cdspath.data[k][::2] for k in ["x","y","lab"]})
+		print(cds_lab.data)
+		rx_label = bkm.LabelSet(x='x',y="y",text="lab",source=cds_lab,x_offset=0.5,y_offset=1)
+		bfig.add_layout(rx_label)
+		### Add filtering: hide when filter condition is not fulfilled
+		rx_line.visible = condition[ii]
+		rx_label.visible = condition[ii]
+	return bfig
+		
 js_callback_dict = {
 	# Dictionary storing JS code for bokeh.models.CustomJS definitions
 	"loadMolecule":"""
@@ -381,6 +435,26 @@ js_callback_dict = {
 		source.data["current_vibration"] = frqval
 		textField.text = "<font size=+1><b>" + molname + " (" + frqval.trim() + ")" + "</b></font>"
 		source.properties.data.change.emit()
+		""",
+
+		"replacePlot":"""
+		//layout - full layout, jsmol - jsmol app (where the profile window will appear), fig2 - profile
+		console.log(layout)
+		console.log("The object")
+		//var current_fig = layout.children[1][0].children[0].children[0]
+
+		var bottom_row = layout.children[1][0].children[0].children[1]
+
+		var data_col = layout.children[1][0].children[0]
+		var current_fig = layout.children[1][0].children[1]
+		console.log(current_fig.properties.name.spec.value)
+		if (current_fig.properties.name.spec.value == "DUMMY"){
+			var fig_array = [data_col,jsmol]
+		} else {
+			var fig_array = [data_col,fig2]
+		}
+		//layout.children[1][0].children[1].children = fig_array
+		layout.children[1][0].children = fig_array
 		"""
 }
 
@@ -442,10 +516,27 @@ def full_view_layout(bokeh_figure,bokeh_graph,local_jsmol=False,local_jsmol_rout
 	# Vibration selector
 	menu.js_on_event("menu_item_click",js_menu_selector)
 	
+	### new button
+	b4 = bkm.Button(label="SURPRISE",width=100)
 	# Layout: left column with network and locator, right row with buttons for JSMol control
 	# Row-based layout???
 	row1 = bkm.Row(b1,menu,b2,spc1,text)
-	row2 = bkm.Row(bkm.Column(bokeh_figure,bkm.Row(text_input,b3)),app)
+	row2 = bkm.Row(bkm.Column(bokeh_figure,bkm.Row(text_input,b3,b4)),app)
 	layout = bokeh.layouts.grid([row1,row2])
+	print(layout)
+
+	# substitution
+	fig2 = dummybokehplot()
+	#layout.children[1][0].children[0].children[0] = fig2
+
+	# Button action has to be defined AFTER the layout
+	js_plot_modif = bkm.CustomJS(args = {"layout":layout,"fig1":bokeh_figure,"fig2":fig2,"jsmol":app}, 
+								 code = js_callback_dict["replacePlot"])
+	b4.js_on_click(js_plot_modif)
+
+	
+
+
+
 	# Optional: path highlighting
 	return layout
