@@ -688,8 +688,7 @@ def graph_path_selector(G,path_list):
 	Gsub = G.subgraph(unique_nodes).copy()
 	fmap = formula_dict_constructor(Gsub)
 	# Set the list of paths as a graph property, including the transition states
-	#Gsub.graph["path_list"] = path_reformatter(G,path_list)
-	Gsub.graph["path_list"] = path_list
+	Gsub.graph["path_list"] = path_reformatter(G,path_list)
 	return Gsub
 
 # Profile generation: generate complete profiles instead of isolated INT/TS/INT triplets

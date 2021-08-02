@@ -10,6 +10,18 @@ import numpy as np
 
 # Basic management functions
 
+def name_prop_fetch(G,key,prop):
+	'''Function to fetch properties from edges or nodes in a NetworkX Graph
+	Input: 
+	- G. NetworkX graph to query.
+	- key. Item of the graph to locate, either string (nodes) or tuple of strings (edge, defined by node names)
+	- prop. String, name of the property to be fetched.
+	'''
+	if (isinstance(key,tuple)):
+		return G.edges[key][prop]
+	else:
+		return G.nodes[key][prop]
+
 def generate_inline_mol(xyzstring):
 	'''Create a JSMol visualization from a newline-separated XYZ-format block
 	Input:
@@ -261,12 +273,14 @@ def profile_datasourcer(G,profile_list):
 	for ii,prof in enumerate(profile_list):
 		# Filter out barrierless TS 
 		kept_ndx = [ii for ii,entry in enumerate(prof) if "TSb" not in entry]
-		working_prof = [prof[ii] for ii in kept_ndx]
+		cleaned_prof = [prof[ii] for ii in kept_ndx]
+		# fix TS names, taking the corresponding nodes as reference
+		working_prof = [(prof[jj-1],prof[jj+1]) if "TS" in entry else entry for jj,entry in enumerate(cleaned_prof)]
 		# Prepare the lines, as in arx.theor_profile_plotter(), duplicating entries
-		xvals = np.arange(0,2*len(prof))
+		xvals = np.arange(0,2*len(working_prof))
 		energies = [arx.simple_prop_fetch(G,entry,"energy") for entry in working_prof]
 		yvals = [e for evalue in energies for e in (evalue,evalue)]
-		labels = [lab for labvalue in working_prof for lab in (labvalue,labvalue)]
+		labels = [lab for labvalue in cleaned_prof for lab in (labvalue,labvalue)]
 		# save as ColumnDataSource
 		prof_cds = bkm.ColumnDataSource(data={"x":xvals,"y":yvals,"lab":labels})
 		cds_list.append(prof_cds)
