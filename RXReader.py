@@ -650,11 +650,16 @@ def path_reformatter(G,path_list):
 	Output:
 	- format_path_list. List of lists, containing paths with transition state names in between nodes'''
 	format_path_list = []
+	# For paths in path_list that already have TSs, do nothing
 	for path in path_list:
-		edges = [(path[ii],path[ii+1]) for ii in range(len(path) - 1)]
-		edge_labels = [G.edges[ed]["name"] for ed in edges]
-		format_path_raw = [[path[jj],edge_labels[jj]] for jj in range(len(edges))] 
-		format_path = [item for sublist in format_path_raw for item in sublist] + [path[-1]]
+		ts_check = any(["TS" in entry for entry in path])
+		if (ts_check):
+			format_path = path
+		else:
+			edges = [(path[ii],path[ii+1]) for ii in range(len(path) - 1)]
+			edge_labels = [G.edges[ed]["name"] for ed in edges]
+			format_path_raw = [[path[jj],edge_labels[jj]] for jj in range(len(edges))] 
+			format_path = [item for sublist in format_path_raw for item in sublist] + [path[-1]]
 		format_path_list.append(format_path)
 	return format_path_list
 
@@ -683,7 +688,9 @@ def graph_path_selector(G,path_list):
 	Output:
 	- Gsub. Subgraph limited to the nodes in the path input.'''
 	# Get all unique nodes belonging to the paths and generate the subgraph
-	selected_nodes = [node for path in path_list for node in path]
+	# If paths were passed including transition states, omit them
+
+	selected_nodes = [node for path in path_list for node in path if "TS" not in node]
 	unique_nodes = list(set(selected_nodes))
 	Gsub = G.subgraph(unique_nodes).copy()
 	fmap = formula_dict_constructor(Gsub)
@@ -708,9 +715,12 @@ def add_paths(G,source_collection=[],target_collection=[],cutoff=1,skip_int_frag
 	'''
 	if (source_collection and target_collection):
 		found_paths = poly_path_finder(G,source_collection,target_collection,cutoff,skip_int_frags)
+		full_paths = path_reformatter(G,found_paths)
+		G.graph["pathList"] = full_paths
+		return full_paths
 	else:
 		# If source or target (or both!) are undefined, find all profiles
-		all_possible_paths = theor_cycle_branch_builder(G,start_node=G.graph["ref_struc"])
+		found_paths = theor_cycle_branch_builder(G,start_node=G.graph["ref_struc"])
 	# If any node is provided as source OR target, filter all_possible_paths to remove these not containing the ref node(s)
 	reference_nodes = set(source_collection + target_collection)
 	if (reference_nodes):

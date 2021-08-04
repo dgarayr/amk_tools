@@ -312,23 +312,23 @@ def profile_bokeh_plot(G,profile_list,condition=[]):
 	for ii,cdspath in enumerate(cds_paths):
 		Nentries = len(cdspath.data["lab"])
 		cndx = (ii % 10)
-		rx_line = bfig.line(x='x',y="y",color=palette[cndx],source=cdspath)
+		rx_line = bfig.line(x="x",y="y",color=palette[cndx],source=cdspath)
 		# Prepare labels, slicing the original CDS to avoid repetitions
 		cds_lab = bkm.ColumnDataSource({k:cdspath.data[k][::2] for k in ["x","y","lab"]})
-		rx_label = bkm.LabelSet(x='x',y="y",text="lab",source=cds_lab,x_offset=0.5,y_offset=1,name="THELABELS")
+		cds_lab.data["x"] = [(float(item) + 0.5) for item in cds_lab.data["x"]]
+		rect = bkm.Rect(x="x",y="y",fill_color=palette[cndx],fill_alpha=0.9,width=1,height=2,line_width=0,name="RECTANGLE")
+		rx_rect = bfig.add_glyph(cds_lab,rect)
+		rx_label = bkm.LabelSet(x="x",y="y",text="lab",source=cds_lab,x_offset=-1,y_offset=1,name="THELABELS")
 		bfig.add_layout(rx_label)
 		### Add filtering: hide when filter condition is not fulfilled
 		rx_line.visible = condition[ii]
+		rx_rect.visible = condition[ii]
 		rx_label.visible = condition[ii]
 
 	# And add the hover
 	hover_prof = bkm.HoverTool(description="Profile hover",tooltips=[("tag","@lab"),("E","@y{%.2f}")],
 							   formatters={"@y":"printf"},renderers=bfig.renderers)
 	bfig.add_tools(hover_prof)
-	#reset_prof = bkm.ResetTool()
-	#reset_prof.js_on_event("click",bkm.CustomJS(args = {"prof":bfig}, code = js_callback_dict["resetProfile"]))
-	#reset_prof.js_on_click(bkm.CustomJS(args = {"prof":bfig}, code = js_callback_dict["resetProfile"]))
-	#bfig.add_tools(reset_prof)
 	bfig.js_on_event('reset',bkm.CustomJS(args = {"prof":bfig}, code = js_callback_dict["resetProfile"]))
 	return bfig
 		
@@ -508,13 +508,18 @@ js_callback_dict = {
 		var ndx = rend.selected.indices[0]
 		var sel_spc = rend.data["name"][ndx]
 		// labels are stored in "center" property of the figure
-		for (let [index,line] of prof.renderers.entries()){
-			var current_data = line.data_source
+		// and we have TWO renderers per entry: skeleton and rectangle
+		var Nlines = prof.renderers.length/2
+		for (let i = 0 ; i < Nlines ; i++){
+			const index = 2*i
+			var current_data = prof.renderers[index].data_source
 			var labels = current_data.data["lab"]
 			// use ! to negate inclusion
 			if (!labels.includes(sel_spc)){
 				prof.renderers[index].visible = false
-				prof.center[index+2].visible = false
+				prof.renderers[index+1].visible = false
+				// use i to map the labels, which are not duplicated
+				prof.center[i+2].visible = false
 			} 
 		prof.properties.renderers.change.emit()
 		}
@@ -528,13 +533,17 @@ js_callback_dict = {
 		function overThreshold(element){
 			return element > thr
 		}
-		for (let [index,line] of prof.renderers.entries()){
-			var current_data = line.data_source
+		var Nlines = prof.renderers.length/2
+		for (let i = 0 ; i < Nlines ; i++){
+			const index = 2*i
+			var current_data = prof.renderers[index].data_source
 			var energies = current_data.data["y"]
 			//hide if anything is above the threshold
 			if (energies.some(overThreshold)){
 				prof.renderers[index].visible = false
-				prof.center[index+2].visible = false
+				prof.renderers[index+1].visible = false
+				// use i to map the labels, which are not duplicated
+				prof.center[i+2].visible = false
 			} 
 		}
 		""",
@@ -542,10 +551,12 @@ js_callback_dict = {
 		"resetProfile":"""
 		// prof - bokeh figure for the profiles
 		// make everything visible
-		console.log("moment")
-		for (let [index,line] of prof.renderers.entries()){
+		var Nlines = prof.renderers.length/2
+		for (let i = 0 ; i < Nlines ; i++){
+			const index = 2*i
 			prof.renderers[index].visible = true
-			prof.center[index+2].visible = true
+			prof.renderers[index+1].visible = true
+			prof.center[i+2].visible = true
 		}
 		""" 
 }
@@ -619,13 +630,13 @@ def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsm
 	# Lower row: main visualizations
 	# | Load vibr.	|Select mode | To clipboard |  | Mol. info 		|
 	# | 	Network visualization	|		JSMol instance			|
-	# | Location text | Loc. button |	Show prof.	| Select prof.	|
+	# | Location text | Loc. button |	Profile options & filters	|
 	row1 = bkm.Row(b1,menu,b2,spc1,text)
 	row2 = bkm.Row(bkm.Column(bokeh_figure,bkm.Row(text_input,b3)),bkm.Column(app))
 	layout = bokeh.layouts.grid([row1,row2])
 
-	# Add the options to see profiles if G was passed to the function
-	if (G and G.graph["pathList"]):
+	# Add the options to see profiles if G was passed to the function and contains a pathList property
+	if (G and "pathList" in G.graph):
 		# Define elements (checkbox & button) and append them to the column containing the JSMol widget
 		# Then instantiate figure and prepare callbacks
 		layout.children[1][0].children[1].children.append(bkm.Row(cbox,b4,thrbox,b5))
