@@ -697,17 +697,16 @@ def pass_args_cmd():
 	argparser.add_argument("workdir",help="Directory with AutoMeKin FINAL calculations",type=str)
 	argparser.add_argument("rxnfile",help="Name of the RXNet file to use. Options: RXNet, RXNet.cg, RXNet.rel",type=str)
 	argparser.add_argument("--barrierless",help="Include barrierless routes from RXNet.barrless",action='store_true')
-	argparser.add_argument("--vibrations",help="Number of normal modes to add to visualization: use -1 for all",type=int,default=-1)
-	argparser.add_argument("--paths",help="Include paths from SOURCE to TARGET",type=str,nargs="*")
-	argparser.add_argument("--cutoff_path",help="Set cutoff for the paths",type=int,default=4)
+	argparser.add_argument("--vibrations",help="Number of normal modes to add to visualization: use -1 for all",type=int,default=-1,metavar="Nvibr")
+	argparser.add_argument("--paths",help="Include paths from SOURCE to TARGET",type=str,nargs="*",metavar=("SOURCE","TARGET"))
+	argparser.add_argument("--cutoff_path",help="Set cutoff for the paths",type=int,default=4,metavar="CUTOFF")
 	argparser.add_argument("--unreduced",help="Use full graph, without selecting nodes in paths",action='store_true')
 	argparser.add_argument("--outfile",help="Name for the HTML output file",type=str,default="network.html")
 	argparser.add_argument("--title",help="Title for the HTML visualization",type=str,default="Reaction network visualization")
-
-	args = argparser.parse_args()
-	if (not (args.workdir and args.rxnfile)):
+	try:
+		args = argparser.parse_args()
+	except:
 		print("workdir and rxnfile must be passed")
-		argparser.print_help()
 		sys.exit()
 	return args
 
