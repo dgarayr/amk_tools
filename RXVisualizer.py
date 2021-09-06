@@ -225,11 +225,16 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 	if (cb_data.index.indices.length > 0) {
 		var ndx = cb_data.index.indices[0]
 		var formula_list = nrend.data["formula"]
-		var formula = formula_list[ndx]
-		if (!formula){
-		hover.tooltips = [["tag","@name"],["E","@energy{%.2f}"]]
+		// fallback for cases without any fragmentation, where formula is not defined
+	    if (formula_list){
+			var formula = formula_list[ndx]
+		} else {
+			var formula = null
+		}
+	    if (!formula){
+			hover.tooltips = [["tag","@name"],["E","@energy{%.2f}"]]
  		} else {
-		hover.tooltips = [["tag","@name"],["E","@energy{%.2f}"],["formula","@formula"]]
+			hover.tooltips = [["tag","@name"],["E","@energy{%.2f}"],["formula","@formula"]]
 		}
 	}
 	'''
