@@ -165,7 +165,7 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 	'''
 
 	# Instantiate figure and graph, setting out basic parameters
-	bfig = bokeh.plotting.Figure(title=graph_title,width=width,height=height,tools="pan,wheel_zoom,box_zoom,reset",
+	bfig = bokeh.plotting.Figure(title=graph_title,width=width,height=height,tools="pan,wheel_zoom,box_zoom,reset,save",
 								x_range=bkm.Range1d(-1.2,1.2),y_range=bkm.Range1d(-1.2,1.2))
 	bfig.axis.visible = False
 	bfig.xgrid.grid_line_color = None
@@ -194,6 +194,7 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 
 	# Add labels according to the positioning object, first for nodes and then for edges
 	nodenames,coords = zip(*positions.items())
+	# replace PROD by PR for nodenames
 	xn,yn = zip(*coords)
 	posnode_dict = {'xn':xn,'yn':yn,'nnames':nodenames}
 	posnode = bkm.ColumnDataSource(posnode_dict)
@@ -201,9 +202,11 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 				  x_offset=0, y_offset=5, source=posnode, render_mode='canvas')
 	bfig.add_layout(labels_node)
 
-	# TS labels: fetch central position and name for every edge
+	# TS labels: fetch central position and name for every edge (skipping barrierless ones)
 	posedge_dict = {'xe':[],'ye':[],'enames':[],'etuples':[]}
 	for ed in G.edges(data=True):
+		if ("TSb" in ed[2]["name"]):
+			continue
 		xy1,xy2 = [positions[nn] for nn in ed[0:2]]
 		mid = 0.5*(xy1+xy2)
 		output = [mid[0],mid[1],ed[2]["name"],(ed[0],ed[1])]
@@ -292,7 +295,8 @@ def profile_bokeh_plot(G,profile_list,condition=[]):
 	- bfig. Bokeh figure containing line plots & labels for every profile in profile_list
 	'''
 	# Initialization: instantiate figure, remove X-axis and add palette
-	bfig = bokeh.plotting.Figure(width=600,height=600,tools="pan,wheel_zoom,reset",name="PROFILE")
+	bfig = bokeh.plotting.Figure(width=600,height=600,tools="pan,wheel_zoom,reset,save",name="PROFILE")
+	#bfig.output_backend = "svg"
 	bfig.xaxis.visible = False
 	bfig.yaxis.axis_label = "E/kcal mol-1"
 	palette = bokeh.palettes.d3['Category10'][10]
@@ -304,11 +308,13 @@ def profile_bokeh_plot(G,profile_list,condition=[]):
 	if (len(condition) != len(profile_list)):
 		condition = [True for prof in profile_list]
 
+	skeleton_lines = []
 	# Iterate & plot
 	for ii,cdspath in enumerate(cds_paths):
 		Nentries = len(cdspath.data["lab"])
 		cndx = (ii % 10)
 		rx_line = bfig.line(x="x",y="y",color=palette[cndx],source=cdspath)
+		skeleton_lines.append(rx_line)
 		# Prepare labels, slicing the original CDS to avoid repetitions
 		cds_lab = bkm.ColumnDataSource({k:cdspath.data[k][::2] for k in ["x","y","lab"]})
 		cds_lab.data["x"] = [(float(item) + 0.5) for item in cds_lab.data["x"]]
@@ -323,7 +329,7 @@ def profile_bokeh_plot(G,profile_list,condition=[]):
 
 	# And add the hover
 	hover_prof = bkm.HoverTool(description="Profile hover",tooltips=[("tag","@lab"),("E","@y{%.2f}")],
-							   formatters={"@y":"printf"},renderers=bfig.renderers)
+							   formatters={"@y":"printf"},renderers=skeleton_lines)
 	bfig.add_tools(hover_prof)
 	bfig.js_on_event('reset',bkm.CustomJS(args = {"prof":bfig}, code = js_callback_dict["resetProfile"]))
 	return bfig
@@ -345,6 +351,11 @@ js_callback_dict = {
 			}
 			var ndx = rend.selected.indices[0]
 			var model = rend.data["model"][ndx]
+			if (model == null){
+				// clear view if no model is available
+				model = "backbone only ; backbone off"
+			}
+			console.log(model)
 			var molname = rend.data["name"][ndx]
 			textField.text = "<font size=+1><b>" + molname + "</b></font>"
 			source.data["script"] = [model]
@@ -648,13 +659,13 @@ def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsm
 		b5.js_on_click(js_select_profile_e)
 	return layout
 
-def generate_visualization(G,title,outfile,workfolder,Nvibrations=-1,with_profiles=False):
+def generate_visualization(G,title,outfile,finaldir,Nvibrations=-1,with_profiles=False):
 	'''Wrapper function to generate HTML visualizations for a given network
 	Input:
 	- G. nx.Graph object as generated from RXReader. For profile support, it should contain a graph["pathList"] property.
 	- title. String, title for the visualization.
 	- outfile. String, name of the output HTML file.
-	- workfolder. String, name of the folder to fetch calculations from (FINAL_LL/FINAL_HL)
+	- finaldir. String, name of the folder to fetch calculations from (FINAL_LL/FINAL_HL)
 	- Nvibrations. Integer, no. of vibrations to be loaded in the visualization. 0: skip vibration loading, -1, load all
 	- with_profiles. Boolean, if True, add profile visualization.
 	Output:
@@ -664,7 +675,7 @@ def generate_visualization(G,title,outfile,workfolder,Nvibrations=-1,with_profil
 	# Add model field to all nodes and edges & also vibrations
 	add_models(G)
 	if (Nvibrations != 0):
-		arx.vibr_displ_parser(workfolder,G,Nvibrations)
+		arx.vibr_displ_parser(finaldir,G,Nvibrations)
 		add_vibr_models(G)
 	
 	# Bokeh-powered visualization via RXVisualizer
@@ -688,7 +699,7 @@ def pass_args_cmd():
 	- args. argparse.ArgumentParser() object.
 	'''
 	argparser = argparse.ArgumentParser()
-	argparser.add_argument("workdir",help="Directory with AutoMeKin FINAL calculations",type=str)
+	argparser.add_argument("finaldir",help="Directory with AutoMeKin FINAL calculations",type=str)
 	argparser.add_argument("rxnfile",help="Name of the RXNet file to use. Options: RXNet, RXNet.cg, RXNet.rel",type=str)
 	g1 = argparser.add_argument_group("RXN parsing")
 	g1.add_argument("--barrierless",'-b',help="Include barrierless routes from RXNet.barrless",action='store_true')
@@ -703,7 +714,7 @@ def pass_args_cmd():
 	try:
 		args = argparser.parse_args()
 	except:
-		print("workdir and rxnfile must be passed")
+		print("finaldir and rxnfile must be passed")
 		argparser.print_help()
 		sys.exit()
 	return args
@@ -717,12 +728,12 @@ def gen_view_cmd(args):
 	- view. Bokeh visualization from full_view_layout().
 	'''
 	# Read the graph
-	data = arx.RX_parser(workfolder=args.workdir,rxnfile=args.rxnfile,check_connection=True)
+	data = arx.RX_parser(finaldir=args.finaldir,rxnfile=args.rxnfile,check_connection=True)
 	if (args.barrierless):
-		data_barrless = arx.RX_parser(workfolder=args.workdir,rxnfile="RXNet.barrless")
+		data_barrless = arx.RX_parser(finaldir=args.finaldir,rxnfile="RXNet.barrless")
 		joined_data = [data[ii]+data_barrless[ii] for ii in range(len(data))]
 		data = joined_data
-	G = arx.RX_builder(workfolder=args.workdir,data=data)
+	G = arx.RX_builder(finaldir=args.finaldir,data=data)
 	# Path handling: several situations are possible: i) SOURCE and TARGET, ii) only SOURCE, iii) not SOURCE nor TARGET, iv) --paths not passed
 	# For i), ii) and iii), paths shall be added, and args.paths will be a LIST
 	paths_passed = isinstance(args.paths,list)
@@ -749,7 +760,7 @@ def gen_view_cmd(args):
 	else:
 		Gwork = G
 	# Generate the visualization
-	view = generate_visualization(Gwork,title=args.title,outfile=args.outfile,workfolder=args.workdir,
+	view = generate_visualization(Gwork,title=args.title,outfile=args.outfile,finaldir=args.finaldir,
 								  Nvibrations=args.vibrations,with_profiles=paths_passed)
 
 	return Gwork,view
