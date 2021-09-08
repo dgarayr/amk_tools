@@ -287,7 +287,8 @@ def RX_builder(finaldir,data,orig_selec_mode=False,add_zpe=True):
 	nodelist = []
 	edgelist = []
 	node_build_dict = {}
-
+	edge_build_dict = {}
+	
 	for tag,ndx in zip(data[0],data[1]):
 		# Original implementation avoids routes starting with PR: allow to keep them
 		# Prepare queries and analyze the right side which can be PR or MIN, treated differently
@@ -321,6 +322,7 @@ def RX_builder(finaldir,data,orig_selec_mode=False,add_zpe=True):
 			data_ts["energy"] = max(e_m1,e_m2)
 			data_ts["frequencies"] = None
 			data_ts["geometry"] = None
+			
 		# check for self-loops and remove them: CONTINUE if we have same index and same selector
 		if ((side1_ii == side2_ii) and (sel_m1 == sel_m2)):
 			continue
@@ -328,15 +330,39 @@ def RX_builder(finaldir,data,orig_selec_mode=False,add_zpe=True):
 		# Compute relative energies and generate consistent labels: unit handling is done at query_all()
 		relvals = [e - e_ref for e in [e_ts,e_m1,e_m2]]
 		labels = [name + str(ii) for name,ii in zip(tag,ndx)]
-		
+
 		# Construct energy dictionary and a full edge constructor with connections, name and energy parameters
 		nn1,nn2 = labels[1:3]
+		
+		# Check if the edge was already known (edges for which several TSs are found upon mech. search)
+		edge_tuples = [(nn1,nn2),(nn2,nn1)]
+		known_edge = [ed in edge_build_dict.keys() for ed in edge_tuples]
+		if (not any(known_edge)):
+			edge_build_dict[(nn1,nn2)] = [labels[0],relvals[0]]
+		else:
+			# Compare energy: only add new entry if it is LOWER
+			new_energy = relvals[0]
+			old_edge = [ed for ed,known in zip(edge_tuples,known_edge) if known][0]
+			olde = edge_build_dict[old_edge]
+			old_energy = edge_build_dict[old_edge][1]
+			# Only go on if the new energy is SMALLER, else neither nodes neither edges shall be updated
+			if (new_energy >= old_energy):
+				#print("%s (%.2f) is above previous %s (%.2f). Skip." % (labels[0],new_energy,olde[0],olde[1]))
+				continue
+			else:
+				#print("Replacing %s (%.2f) by %s (%.2f)" % (olde[0],olde[1],labels[0],new_energy))
+				# update the tracking dict, with the same key
+				edge_build_dict[old_edge] = [labels[0],relvals[0]]
+				
 		# Dictionary updaters
 		if (nn1 not in node_build_dict.keys()):
 			nodelist.append((nn1,dict_updater(data_m1,relvals[1],nn1)))
 		if (nn2 not in node_build_dict.keys()):
 			nodelist.append((nn2,dict_updater(data_m2,relvals[2],nn2)))
 		# For edges, consider possible barrierless cases
+		# Also handle situations where the edge was already present (pre-existing transition state)
+		# and only keep the TS with the lowest energy
+
 		if (barrierless):
 			data_ts["energy"] = relvals[0]
 			edgelist.append((nn1,nn2,data_ts))
