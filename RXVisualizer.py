@@ -170,6 +170,7 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 	bfig.axis.visible = False
 	bfig.xgrid.grid_line_color = None
 	bfig.ygrid.grid_line_color = None
+	bfig.title.text_font_size = "1.5vh"
 
 	# Check if positions were passed, and create inside if necessary
 	if (not positions):
@@ -295,10 +296,12 @@ def profile_bokeh_plot(G,profile_list,condition=[],width=600,height=600):
 	- bfig. Bokeh figure containing line plots & labels for every profile in profile_list
 	'''
 	# Initialization: instantiate figure, remove X-axis and add palette
-	bfig = bokeh.plotting.Figure(width=width,height=width,tools="pan,wheel_zoom,reset,save",name="PROFILE")
+	bfig = bokeh.plotting.Figure(width=width,height=height,tools="pan,wheel_zoom,reset,save",name="PROFILE")
 	#bfig.output_backend = "svg"
 	bfig.xaxis.visible = False
 	bfig.yaxis.axis_label = "E/kcal mol-1"
+	bfig.yaxis.axis_label_text_font_size = "1.5vh"
+	bfig.yaxis.major_label_text_font_size = "1.2vh"
 	palette = bokeh.palettes.d3['Category10'][10]
 
 	# Generate the list of ColumnDataSources
@@ -581,30 +584,33 @@ def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsm
 	- local_jsmol. Boolean, if True, use a local instance of JSMol, located in local_route
 	- local_jsmol_route. String, path to the local JSMol instance
 	'''
+	# Control the sizes
+	w1 = sizing_dict['w1']		# network plot width
+	w2 = sizing_dict['w2']		# JSMol & profile plot width
+	h = sizing_dict['h']		# height for main plots
+	hw = int(h/6)			# height for each widget
 	# Add access to data sources for nodes and edges
 	nodesource = bokeh_graph.node_renderer.data_source
 	edgesource = bokeh_graph.edge_renderer.data_source
 	
 	# Instantiate the applet
-	info,app,script_source = generate_applet(local_jsmol,local_jsmol_route,width=sizing_dict['w2'],height=sizing_dict['h'])
+	info,app,script_source = generate_applet(local_jsmol,local_jsmol_route,width=w2,
+						 height=h)
 
 	# Instantiate the required widgets: buttons, text inputs, menus...
-	# Control the sizes
-	w1 = sizing_dict['w1']
-	w2 = sizing_dict['w2']
-	h = sizing_dict['h']
-	b1 = bkm.Button(label="Load vibrations",max_width=int(w1/4)) 
-	b2 = bkm.Button(label="To clipboard",max_width=int(w1/4))
-	text_input = bkm.TextInput(value=nodesource.data["name"][0],max_width=2*int(w1/4))
-	b3 = bkm.Button(label="Locate molecule",max_width=2*int(w1/4))
-	menu = bkm.Dropdown(label="Normal modes",menu=[("No vibr. loaded","None"),None],disabled=True,max_width=2*int(w1/4))
-	spc1 = bkm.Spacer(width=int(w2/2))
-	text = bkm.Div(text="")
+	
+	b1 = bkm.Button(label="Load vibrations",max_width=int(w1/4),css_classes=['xspecial'],align='end') 
+	b2 = bkm.Button(label="To clipboard",max_width=int(w1/4),css_classes=['xtest'],align='end')
+	text_input = bkm.TextInput(value=nodesource.data["name"][0],max_width=2*int(w1/4),align='end')
+	b3 = bkm.Button(label="Locate molecule",max_width=2*int(w1/4),align="center")
+	menu = bkm.Dropdown(label="Normal modes",menu=[("No vibr. loaded","None"),None],disabled=True,max_width=2*int(w1/4),align="center")
+	spc1 = bkm.Spacer(width=int(w2/2),align="center")
+	text = bkm.Div(text="(Click an element)",height=hw,align="center")
 	# For profile-based elements
-	b4 = bkm.Button(label="Molec. filter",max_width=int(w2/5))
-	cbox = bkm.CheckboxGroup(labels=["Show profile"],max_width=int(w2/5))
-	b5 = bkm.Button(label="Energy filter",max_width=int(w2/5))
-	thrbox = bkm.TextInput(value="%.2f" % max(edgesource.data["energy"]),width=2*int(w2/5))
+	b4 = bkm.Button(label="Molec. filter",max_width=int(w2/5),align="center")
+	cbox = bkm.CheckboxGroup(labels=["Show profile"],max_width=int(w2/5),max_height=int(h/6),align="center")
+	b5 = bkm.Button(label="Energy filter",max_width=int(w2/5),align="center")
+	thrbox = bkm.TextInput(value="%.2f" % max(edgesource.data["energy"]),width=2*int(w2/5),align="center")
 
 	# Write the JavaScript callback to allow to avoid the Bokeh server: all is ported to JavaScript
 	# For this to work, we need to pre-load all models in the graph
@@ -636,28 +642,24 @@ def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsm
 	b3.js_on_click(js_mol_locator)
 	# Vibration selector
 	menu.js_on_event("menu_item_click",js_menu_selector)
-
-	# Layout: 
-	# Upper row: controls & info. 
-	# Lower row: main visualizations
-	# | Load vibr.	|Select mode | To clipboard |  | Mol. info 		|
-	# | 	Network visualization	|		JSMol instance			|
-	# | Location text | Loc. button |	Profile options & filters	|
-
+	
 	# New layout: by columns
-	col1 = bkm.Column(bkm.Row(b1,menu,b2),bokeh_figure,bkm.Row(text_input,b3),width=sizing_dict['w1'])
-	col2 = bkm.Column(bkm.Row(spc1,text),bkm.Row(app),sizing_mode='scale_height',width=sizing_dict['w2'])
+	# Left column: controls (1), network view and molecule locator
+	# Right column: mol. name, JSMol/profile view and profile controls
+	# | Load vibr.	| Modes | Clipboard	 ||	  	Mol. info 			|
+	# | 	Network visualization		 ||		JSMol // Profile		|
+	# | Location text | Loc. button		 ||		Profile options 		|
+
+	col1 = bkm.Column(bkm.Row(b1,menu,b2,height=hw),bokeh_figure,bkm.Row(text_input,b3,height=hw),width=sizing_dict['w1'])
+	col2 = bkm.Column(bkm.Row(spc1,text,height=hw),bkm.Row(app),width=w2)
 
 	layout = bokeh.layouts.grid([col1,col2],ncols=2)
-	#row1 = bkm.Row(b1,menu,b2,spc1,text)
-	#row2 = bkm.Row(bkm.Column(bokeh_figure,bkm.Row(text_input,b3)),bkm.Column(app))
-	#layout = bokeh.layouts.grid([row1,row2])
 
 	# Add the options to see profiles if G was passed to the function and contains a pathList property
 	if (G and "pathList" in G.graph):
 		# Define elements (checkbox & button) and append them to the column containing the JSMol widget
 		# Then instantiate figure and prepare callbacks
-		layout.children[1][0].children.append(bkm.Row(cbox,b4,thrbox,b5))
+		layout.children[1][0].children.append(bkm.Row(cbox,b4,thrbox,b5,height=int(h/6)))
 
 		#layout.children[1][0].children[1].children.append(bkm.Row(cbox,b4,thrbox,b5))
 		fig_prof = profile_bokeh_plot(G,G.graph["pathList"],width=w2,height=h)
@@ -689,8 +691,32 @@ def generate_visualization(G,title,outfile,finaldir,Nvibrations=-1,with_profiles
 	w2 = int(size[0]*3/7)
 	wu = int(size[0]/7)
 	h = int(size[1]*6/8)
-
+	
 	sizing_dict = {'w1':w1,'w2':w2,'wu':wu,'h':h}
+
+	### Define custom classes
+
+	style_template = """
+	{% block postamble %}
+	<style>
+	.bk-root .bk-btn-default {
+		font-size: 1.2vh;
+	}
+	.bk-root .bk-input {
+		font-size: 1.2vh;
+		padding-bottom: 5px;
+		padding-top: 5px;
+	}
+	.bk-root .bk {
+		font-size: 1.2vh;
+	}
+	.bk-root .bk-clearfix{
+		padding-bottom: 0.8vh;
+	}
+	</style>
+	{% endblock %}
+	"""
+
 	posx = nx.spring_layout(G)
 	# Add model field to all nodes and edges & also vibrations
 	add_models(G)
@@ -707,7 +733,7 @@ def generate_visualization(G,title,outfile,finaldir,Nvibrations=-1,with_profiles
 		lay = full_view_layout(bk_fig,bk_graph,sizing_dict=sizing_dict)
 
 	bokeh.plotting.output_file(outfile,title=title)
-	bokeh.plotting.save(lay)
+	bokeh.plotting.save(lay,template=style_template)
 	
 	return lay
 
@@ -787,3 +813,5 @@ def gen_view_cmd(args):
 								  Nvibrations=args.vibrations,with_profiles=paths_passed,size=(width_value,height_value))
 
 	return Gwork,view
+
+    
