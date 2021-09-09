@@ -10,6 +10,41 @@ from jsmol_bokeh_extension import JSMol
 import networkx as nx
 import numpy as np
 
+# Custom tool definition
+from bokeh.models import Tool
+class HidingTool(Tool):
+	__implementation__ = """
+	import {ActionTool, ActionToolView} from "models/tools/actions/action_tool"
+	import * as p from "core/properties"
+	export class HidingToolView extends ActionToolView {
+		model: HidingTool
+		doit(): void{
+			console.log(this.plot_view)
+		}
+	}
+	export namespace HidingTool {
+		export type Attrs = p.AttrsOf<Props>
+		export type Props = ActionTool.Props
+	}
+
+	export interface HidingTool extends HidingTool.Attrs {}
+	export class HidingTool extends ActionTool {
+		properties: HidingTool.Props
+		__view_type__: HidingToolView
+		constructor(attrs?: Partial<HidingTool.Attrs>){
+			super(attrs)
+		}
+		static init_HidingTool(): void {
+			this.prototype.default_view = HidingToolView
+			this.register_alias("hiding", () => new HidingTool())
+
+		}
+		tool_name = "Hiding"
+		icon = "bk-tool-icon-lasso-select"
+	}
+	"""
+
+
 # Basic management functions
 
 def generate_inline_mol(xyzstring):
@@ -163,7 +198,7 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 	  reset, hovering...)
 	- Gbok. Bokeh plot generated via from_networkx(),
 	'''
-
+	
 	# Instantiate figure and graph, setting out basic parameters
 	bfig = bokeh.plotting.Figure(title=graph_title,width=width,height=height,tools="pan,wheel_zoom,box_zoom,reset,save",
 								x_range=bkm.Range1d(-1.2,1.2),y_range=bkm.Range1d(-1.2,1.2))
@@ -255,6 +290,13 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 	tap = bkm.TapTool(renderers=[Gbok.node_renderer,Gbok.edge_renderer])
 	bfig.add_tools(tap)
 
+	# allow to hide tags
+	hidetool = HidingTool()
+	#bfig.toolbar.tools.append(hidetool)
+	hide_count = 1
+	hidetool.js_on_event("tap",bkm.CustomJS(args={"figure":bfig,"counter":[hide_count]},code=js_callback_dict["hideLabels"]))
+ 
+	bfig.add_tools(hidetool)
 	return bfig,Gbok
 
 def profile_datasourcer(G,profile_list):
@@ -569,7 +611,34 @@ js_callback_dict = {
 			prof.renderers[index+1].visible = true
 			prof.center[i+2].visible = true
 		}
-		""" 
+		""",
+
+		"hideLabels":"""
+		// hide all labels from a reaction network
+		// figure - bokeh FIGURE for the network view, counter - inner counter for state, use list for mutability
+		// edit the 3rd and 4th elements of the figure.center array, containing labelsets
+		// 0 - all labels on, 1 - TS labels off, 2 - all labels off
+		var ct = counter[0]
+		switch (ct) {
+			case 0:
+				figure.center[2].visible = true
+				figure.center[3].visible = true
+				break
+			case 1:
+				figure.center[2].visible = true
+				figure.center[3].visible = false
+				break
+			case 2:
+				figure.center[2].visible = false
+				figure.center[3].visible = false
+				break
+		}
+		ct = ct + 1
+		if (ct >= 3) {
+			ct = 0
+		}
+		counter[0] = ct
+		"""
 }
 
 def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsmol_route=None,sizing_dict={}):
@@ -584,6 +653,7 @@ def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsm
 	- local_jsmol. Boolean, if True, use a local instance of JSMol, located in local_route
 	- local_jsmol_route. String, path to the local JSMol instance
 	'''
+	print(bokeh_figure.center)
 	# Control the sizes
 	w1 = sizing_dict['w1']		# network plot width
 	w2 = sizing_dict['w2']		# JSMol & profile plot width
@@ -592,16 +662,15 @@ def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsm
 	# Add access to data sources for nodes and edges
 	nodesource = bokeh_graph.node_renderer.data_source
 	edgesource = bokeh_graph.edge_renderer.data_source
-	
 	# Instantiate the applet
 	info,app,script_source = generate_applet(local_jsmol,local_jsmol_route,width=w2,
 						 height=h)
 
 	# Instantiate the required widgets: buttons, text inputs, menus...
 	
-	b1 = bkm.Button(label="Load vibrations",max_width=int(w1/4),css_classes=['xspecial'],align='end') 
-	b2 = bkm.Button(label="To clipboard",max_width=int(w1/4),css_classes=['xtest'],align='end')
-	text_input = bkm.TextInput(value=nodesource.data["name"][0],max_width=2*int(w1/4),align='end')
+	b1 = bkm.Button(label="Load vibrations",max_width=int(w1/4),css_classes=['xspecial'],align="center") 
+	b2 = bkm.Button(label="To clipboard",max_width=int(w1/4),css_classes=['xtest'],align="center")
+	text_input = bkm.TextInput(value=nodesource.data["name"][0],max_width=int(w1/4),align="center")
 	b3 = bkm.Button(label="Locate molecule",max_width=2*int(w1/4),align="center")
 	menu = bkm.Dropdown(label="Normal modes",menu=[("No vibr. loaded","None"),None],disabled=True,max_width=2*int(w1/4),align="center")
 	spc1 = bkm.Spacer(width=int(w2/2),align="center")
@@ -612,6 +681,9 @@ def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsm
 	b5 = bkm.Button(label="Energy filter",max_width=int(w2/5),align="center")
 	thrbox = bkm.TextInput(value="%.2f" % max(edgesource.data["energy"]),width=2*int(w2/5),align="center")
 
+	# button for hiding labels: use a counter for inner state
+	b6 = bkm.Button(label="Hide!",max_width=int(w1/4),align="center")
+	b6_count = 1
 	# Write the JavaScript callback to allow to avoid the Bokeh server: all is ported to JavaScript
 	# For this to work, we need to pre-load all models in the graph
 	js_load_mol = bkm.CustomJS(args = {"graph":bokeh_graph,"source":script_source,"textField":text}, 
@@ -629,6 +701,8 @@ def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsm
 	js_menu_selector = bkm.CustomJS(args = {"source":script_source,"menu":menu,"textField":text},
 					 			    code = js_callback_dict["chooseVibrationMenu"])
 
+	js_hide_label = bkm.CustomJS(args = {"figure":bokeh_figure,"counter":[b6_count]},code = js_callback_dict["hideLabels"])
+	
 	# Set up the JS callbacks for nodes and edges
 	bokeh_graph.node_renderer.data_source.selected.js_on_change('indices',js_load_mol)
 	bokeh_graph.edge_renderer.data_source.selected.js_on_change('indices',js_load_mol)
@@ -642,6 +716,9 @@ def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsm
 	b3.js_on_click(js_mol_locator)
 	# Vibration selector
 	menu.js_on_event("menu_item_click",js_menu_selector)
+
+	# Label hiding
+	b6.js_on_click(js_hide_label)
 	
 	# New layout: by columns
 	# Left column: controls (1), network view and molecule locator
@@ -650,7 +727,7 @@ def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsm
 	# | 	Network visualization		 ||		JSMol // Profile		|
 	# | Location text | Loc. button		 ||		Profile options 		|
 
-	col1 = bkm.Column(bkm.Row(b1,menu,b2,height=hw),bokeh_figure,bkm.Row(text_input,b3,height=hw),width=sizing_dict['w1'])
+	col1 = bkm.Column(bkm.Row(b1,menu,b2,height=hw),bokeh_figure,bkm.Row(text_input,b3,b6,height=hw),width=sizing_dict['w1'])
 	col2 = bkm.Column(bkm.Row(spc1,text,height=hw),bkm.Row(app),width=w2)
 
 	layout = bokeh.layouts.grid([col1,col2],ncols=2)
