@@ -163,7 +163,7 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 	  reset, hovering...)
 	- Gbok. Bokeh plot generated via from_networkx(),
 	'''
-
+	
 	# Instantiate figure and graph, setting out basic parameters
 	bfig = bokeh.plotting.Figure(title=graph_title,width=width,height=height,tools="pan,wheel_zoom,box_zoom,reset,save",
 								x_range=bkm.Range1d(-1.2,1.2),y_range=bkm.Range1d(-1.2,1.2))
@@ -200,7 +200,8 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 	posnode_dict = {'xn':xn,'yn':yn,'nnames':nodenames}
 	posnode = bkm.ColumnDataSource(posnode_dict)
 	labels_node = bkm.LabelSet(x='xn', y='yn', text='nnames', text_font_style='bold',
-				  x_offset=0, y_offset=5, source=posnode, render_mode='canvas')
+				   x_offset=0, y_offset=5, source=posnode, render_mode='canvas',
+				   text_font_size='2vh')
 	bfig.add_layout(labels_node)
 
 	# TS labels: fetch central position and name for every edge (skipping barrierless ones)
@@ -215,7 +216,8 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 			posedge_dict[key].append(output[ik])
 	posedge = bkm.ColumnDataSource(posedge_dict)
 	labels_edge = bkm.LabelSet(x='xe', y='ye', text='enames', text_font_style='bold',text_color='red',
-				  x_offset=0, y_offset=0, source=posedge, render_mode='canvas')
+				   x_offset=0, y_offset=0, source=posedge, render_mode='canvas',
+				   text_font_size='2vh')
 	bfig.add_layout(labels_edge)
 
 	# Adding tools: hover & tap. To be able to see info about both nodes and edges, we must change the inspection policy
@@ -247,14 +249,24 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 	hover_node.callback = bkm.CustomJS(args=dict(hover=hover_node,graph=Gbok),code=hoverJS)
 	hover_edge = bkm.HoverTool(description="Edge hover",tooltips=[("tag","@name"),("E","@energy{%.2f}")],
 							   formatters={"@energy":"printf"},renderers=[Gbok.edge_renderer])
-
 	bfig.add_tools(hover_node)
 	bfig.add_tools(hover_edge)
-
 	Gbok.selection_policy = bkm.EdgesAndLinkedNodes()
 	tap = bkm.TapTool(renderers=[Gbok.node_renderer,Gbok.edge_renderer])
 	bfig.add_tools(tap)
 
+	# allow to hide tags, using a CustomAction
+	# prepare simple 8x8 icon as a numpy array (8x8x3 for RGB)
+
+	icon = np.zeros((8,8,3),dtype=np.uint8)
+	# grey border and white inner region
+	icon.fill(200)
+	icon[1]
+	icon[1:-1,1:-1,:] = 255
+	hide_count = 1
+	hide_js = bkm.CustomJS(args={"figure":bfig,"counter":[hide_count]},code=js_callback_dict["hideLabels"])
+	hide_action = bkm.CustomAction(icon=icon,callback=hide_js,description="Hide labels")
+	bfig.add_tools(hide_action)
 	return bfig,Gbok
 
 def profile_datasourcer(G,profile_list):
@@ -347,6 +359,8 @@ js_callback_dict = {
 		if (cb_obj.indices.length) {
 			var ninds = nrend.selected.indices
 			var einds = erend.selected.indices
+			console.log(ninds)
+			console.log(einds)
 			if (ninds.length) {
 				var rend = nrend
 			} else {
@@ -442,8 +456,10 @@ js_callback_dict = {
 		var mol_query = text_input.value
 		if (mol_query.includes("TS")) {
 			var renderer = erend
+			var other_renderer = nrend
 		} else {
 			var renderer = nrend
+			var other_renderer = erend
 		}
 		var pool_names = renderer.data["name"]
 		var ndx = pool_names.indexOf(mol_query)
@@ -460,8 +476,12 @@ js_callback_dict = {
 			var positions = layout[mol_query]
 		}
 		// returns -1 if element is not present
+		console.log(ndx)
 		if (ndx >= 0) {
+			// clearing other sel. avoids problems for model loading sometimes
+			other_renderer.selected.indices = []
 			renderer.selected.indices = [ndx]
+			console.log(other_renderer.selected.indices)
 			fig.x_range.start = positions[0] - 0.5
 			fig.x_range.end = positions[0] + 0.5
 			fig.y_range.start = positions[1] - 0.5
@@ -569,7 +589,34 @@ js_callback_dict = {
 			prof.renderers[index+1].visible = true
 			prof.center[i+2].visible = true
 		}
-		""" 
+		""",
+
+		"hideLabels":"""
+		// hide all labels from a reaction network
+		// figure - bokeh FIGURE for the network view, counter - inner counter for state, use list for mutability
+		// edit the 3rd and 4th elements of the figure.center array, containing labelsets
+		// 0 - all labels on, 1 - TS labels off, 2 - all labels off
+		var ct = counter[0]
+		switch (ct) {
+			case 0:
+				figure.center[2].visible = true
+				figure.center[3].visible = true
+				break
+			case 1:
+				figure.center[2].visible = true
+				figure.center[3].visible = false
+				break
+			case 2:
+				figure.center[2].visible = false
+				figure.center[3].visible = false
+				break
+		}
+		ct = ct + 1
+		if (ct >= 3) {
+			ct = 0
+		}
+		counter[0] = ct
+		"""
 }
 
 def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsmol_route=None,sizing_dict={}):
@@ -592,16 +639,15 @@ def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsm
 	# Add access to data sources for nodes and edges
 	nodesource = bokeh_graph.node_renderer.data_source
 	edgesource = bokeh_graph.edge_renderer.data_source
-	
 	# Instantiate the applet
 	info,app,script_source = generate_applet(local_jsmol,local_jsmol_route,width=w2,
 						 height=h)
 
 	# Instantiate the required widgets: buttons, text inputs, menus...
 	
-	b1 = bkm.Button(label="Load vibrations",max_width=int(w1/4),css_classes=['xspecial'],align='end') 
-	b2 = bkm.Button(label="To clipboard",max_width=int(w1/4),css_classes=['xtest'],align='end')
-	text_input = bkm.TextInput(value=nodesource.data["name"][0],max_width=2*int(w1/4),align='end')
+	b1 = bkm.Button(label="Load vibrations",max_width=int(w1/4),css_classes=['xspecial'],align="center") 
+	b2 = bkm.Button(label="To clipboard",max_width=int(w1/4),css_classes=['xtest'],align="center")
+	text_input = bkm.TextInput(value=nodesource.data["name"][0],max_width=int(w1/4),align="center")
 	b3 = bkm.Button(label="Locate molecule",max_width=2*int(w1/4),align="center")
 	menu = bkm.Dropdown(label="Normal modes",menu=[("No vibr. loaded","None"),None],disabled=True,max_width=2*int(w1/4),align="center")
 	spc1 = bkm.Spacer(width=int(w2/2),align="center")
