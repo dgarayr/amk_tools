@@ -112,7 +112,7 @@ def add_vibr_models(G):
 
 	return None
 
-def generate_applet(local=False,local_route=None):
+def generate_applet(local=False,local_route=None,width=600,height=600):
 	'''JSMol applet generation for a molecule with a given XYZ block, borrowed
 	from example in original repo of jsmol_bokeh_extension. Relies on three main elements
 	Input
@@ -142,8 +142,8 @@ def generate_applet(local=False,local_route=None):
 	script_source = bkm.ColumnDataSource({"script":[]})
 	# Build applet
 	applet = JSMol(
-		width=600,
-		height=600,
+		width=width,
+		height=height,
 		script_source=script_source,
 		info=info_dict,
 	)
@@ -163,13 +163,14 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 	  reset, hovering...)
 	- Gbok. Bokeh plot generated via from_networkx(),
 	'''
-
+	
 	# Instantiate figure and graph, setting out basic parameters
 	bfig = bokeh.plotting.Figure(title=graph_title,width=width,height=height,tools="pan,wheel_zoom,box_zoom,reset,save",
 								x_range=bkm.Range1d(-1.2,1.2),y_range=bkm.Range1d(-1.2,1.2))
 	bfig.axis.visible = False
 	bfig.xgrid.grid_line_color = None
 	bfig.ygrid.grid_line_color = None
+	bfig.title.text_font_size = "1.5vh"
 
 	# Check if positions were passed, and create inside if necessary
 	if (not positions):
@@ -199,7 +200,8 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 	posnode_dict = {'xn':xn,'yn':yn,'nnames':nodenames}
 	posnode = bkm.ColumnDataSource(posnode_dict)
 	labels_node = bkm.LabelSet(x='xn', y='yn', text='nnames', text_font_style='bold',
-				  x_offset=0, y_offset=5, source=posnode, render_mode='canvas')
+				   x_offset=0, y_offset=5, source=posnode, render_mode='canvas',
+				   text_font_size='2vh')
 	bfig.add_layout(labels_node)
 
 	# TS labels: fetch central position and name for every edge (skipping barrierless ones)
@@ -214,7 +216,8 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 			posedge_dict[key].append(output[ik])
 	posedge = bkm.ColumnDataSource(posedge_dict)
 	labels_edge = bkm.LabelSet(x='xe', y='ye', text='enames', text_font_style='bold',text_color='red',
-				  x_offset=0, y_offset=0, source=posedge, render_mode='canvas')
+				   x_offset=0, y_offset=0, source=posedge, render_mode='canvas',
+				   text_font_size='2vh')
 	bfig.add_layout(labels_edge)
 
 	# Adding tools: hover & tap. To be able to see info about both nodes and edges, we must change the inspection policy
@@ -246,14 +249,24 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 	hover_node.callback = bkm.CustomJS(args=dict(hover=hover_node,graph=Gbok),code=hoverJS)
 	hover_edge = bkm.HoverTool(description="Edge hover",tooltips=[("tag","@name"),("E","@energy{%.2f}")],
 							   formatters={"@energy":"printf"},renderers=[Gbok.edge_renderer])
-
 	bfig.add_tools(hover_node)
 	bfig.add_tools(hover_edge)
-
 	Gbok.selection_policy = bkm.EdgesAndLinkedNodes()
 	tap = bkm.TapTool(renderers=[Gbok.node_renderer,Gbok.edge_renderer])
 	bfig.add_tools(tap)
 
+	# allow to hide tags, using a CustomAction
+	# prepare simple 8x8 icon as a numpy array (8x8x3 for RGB)
+
+	icon = np.zeros((8,8,3),dtype=np.uint8)
+	# grey border and white inner region
+	icon.fill(200)
+	icon[1]
+	icon[1:-1,1:-1,:] = 255
+	hide_count = 1
+	hide_js = bkm.CustomJS(args={"figure":bfig,"counter":[hide_count]},code=js_callback_dict["hideLabels"])
+	hide_action = bkm.CustomAction(icon=icon,callback=hide_js,description="Hide labels")
+	bfig.add_tools(hide_action)
 	return bfig,Gbok
 
 def profile_datasourcer(G,profile_list):
@@ -284,7 +297,7 @@ def profile_datasourcer(G,profile_list):
 		cds_list.append(prof_cds)
 	return cds_list
 
-def profile_bokeh_plot(G,profile_list,condition=[]):
+def profile_bokeh_plot(G,profile_list,condition=[],width=600,height=600):
 	'''Generate a Bokeh figure for energy profiles, using profile_datasourcer() to transform the profile list to a 
 	ColumnDataSource list.
 	Input:
@@ -295,10 +308,12 @@ def profile_bokeh_plot(G,profile_list,condition=[]):
 	- bfig. Bokeh figure containing line plots & labels for every profile in profile_list
 	'''
 	# Initialization: instantiate figure, remove X-axis and add palette
-	bfig = bokeh.plotting.Figure(width=600,height=600,tools="pan,wheel_zoom,reset,save",name="PROFILE")
+	bfig = bokeh.plotting.Figure(width=width,height=height,tools="pan,wheel_zoom,reset,save",name="PROFILE")
 	#bfig.output_backend = "svg"
 	bfig.xaxis.visible = False
 	bfig.yaxis.axis_label = "E/kcal mol-1"
+	bfig.yaxis.axis_label_text_font_size = "1.5vh"
+	bfig.yaxis.major_label_text_font_size = "1.2vh"
 	palette = bokeh.palettes.d3['Category10'][10]
 
 	# Generate the list of ColumnDataSources
@@ -344,6 +359,8 @@ js_callback_dict = {
 		if (cb_obj.indices.length) {
 			var ninds = nrend.selected.indices
 			var einds = erend.selected.indices
+			console.log(ninds)
+			console.log(einds)
 			if (ninds.length) {
 				var rend = nrend
 			} else {
@@ -439,8 +456,10 @@ js_callback_dict = {
 		var mol_query = text_input.value
 		if (mol_query.includes("TS")) {
 			var renderer = erend
+			var other_renderer = nrend
 		} else {
 			var renderer = nrend
+			var other_renderer = erend
 		}
 		var pool_names = renderer.data["name"]
 		var ndx = pool_names.indexOf(mol_query)
@@ -457,8 +476,12 @@ js_callback_dict = {
 			var positions = layout[mol_query]
 		}
 		// returns -1 if element is not present
+		console.log(ndx)
 		if (ndx >= 0) {
+			// clearing other sel. avoids problems for model loading sometimes
+			other_renderer.selected.indices = []
 			renderer.selected.indices = [ndx]
+			console.log(other_renderer.selected.indices)
 			fig.x_range.start = positions[0] - 0.5
 			fig.x_range.end = positions[0] + 0.5
 			fig.y_range.start = positions[1] - 0.5
@@ -479,17 +502,18 @@ js_callback_dict = {
 
 		"replacePlot":"""
 		//layout - full layout, jsmol - jsmol app (where the profile window will appear), prof - profile
-
-		var current_fig = layout.children[1][0].children[1]
-		var current_plot = current_fig.children[0]
-		var controls = current_fig.children[1]
+		var current_fig = layout.children[1][0].children
+		var name_elem = current_fig[0]
+		var current_plot = current_fig[1]
+		var control_elem = current_fig[2]
+		
 		if (current_plot.properties.name.spec.value == "PROFILE"){
-			var side_array = [jsmol,controls]
+			var right_col = [name_elem,jsmol,control_elem]
 		} else {
-			var side_array = [prof,controls]
+			var right_col = [name_elem,prof,control_elem]
 		}
 		// we need to modify the children list, does not work for single substitutions
-		layout.children[1][0].children[1].children = side_array
+		layout.children[1][0].children = right_col
 		""",
 
 		"selectProfileByMol":"""
@@ -565,10 +589,37 @@ js_callback_dict = {
 			prof.renderers[index+1].visible = true
 			prof.center[i+2].visible = true
 		}
-		""" 
+		""",
+
+		"hideLabels":"""
+		// hide all labels from a reaction network
+		// figure - bokeh FIGURE for the network view, counter - inner counter for state, use list for mutability
+		// edit the 3rd and 4th elements of the figure.center array, containing labelsets
+		// 0 - all labels on, 1 - TS labels off, 2 - all labels off
+		var ct = counter[0]
+		switch (ct) {
+			case 0:
+				figure.center[2].visible = true
+				figure.center[3].visible = true
+				break
+			case 1:
+				figure.center[2].visible = true
+				figure.center[3].visible = false
+				break
+			case 2:
+				figure.center[2].visible = false
+				figure.center[3].visible = false
+				break
+		}
+		ct = ct + 1
+		if (ct >= 3) {
+			ct = 0
+		}
+		counter[0] = ct
+		"""
 }
 
-def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsmol_route=None):
+def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsmol_route=None,sizing_dict={}):
 	'''
 	Combination of the interactive graph visualization generated by bokeh_network_view with a JSMol instance and the
 	corresponding interaction buttons. Molecules are shown by clicking in each edge or node.
@@ -580,26 +631,32 @@ def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsm
 	- local_jsmol. Boolean, if True, use a local instance of JSMol, located in local_route
 	- local_jsmol_route. String, path to the local JSMol instance
 	'''
+	# Control the sizes
+	w1 = sizing_dict['w1']		# network plot width
+	w2 = sizing_dict['w2']		# JSMol & profile plot width
+	h = sizing_dict['h']		# height for main plots
+	hw = int(h/6)			# height for each widget
 	# Add access to data sources for nodes and edges
 	nodesource = bokeh_graph.node_renderer.data_source
 	edgesource = bokeh_graph.edge_renderer.data_source
-	
 	# Instantiate the applet
-	info,app,script_source = generate_applet(local_jsmol,local_jsmol_route)
+	info,app,script_source = generate_applet(local_jsmol,local_jsmol_route,width=w2,
+						 height=h)
 
 	# Instantiate the required widgets: buttons, text inputs, menus...
-	b1 = bkm.Button(label="Load vibrations",width=100) 
-	b2 = bkm.Button(label="Geometry to clipboard",width=100)
-	text_input = bkm.TextInput(value=nodesource.data["name"][0],width_policy="fit")
-	b3 = bkm.Button(label="Locate molecule",width_policy="fit")
-	menu = bkm.Dropdown(label="Normal modes",menu=[("No vibr. loaded","None"),None],disabled=True,width=200)
-	spc1 = bkm.Spacer(width=650)
-	text = bkm.Div(text="",width=300)
+	
+	b1 = bkm.Button(label="Load vibrations",max_width=int(w1/4),css_classes=['xspecial'],align="center") 
+	b2 = bkm.Button(label="To clipboard",max_width=int(w1/4),css_classes=['xtest'],align="center")
+	text_input = bkm.TextInput(value=nodesource.data["name"][0],max_width=int(w1/4),align="center")
+	b3 = bkm.Button(label="Locate molecule",max_width=2*int(w1/4),align="center")
+	menu = bkm.Dropdown(label="Normal modes",menu=[("No vibr. loaded","None"),None],disabled=True,max_width=2*int(w1/4),align="center")
+	spc1 = bkm.Spacer(width=int(w2/2),align="center")
+	text = bkm.Div(text="(Click an element)",height=hw,align="center")
 	# For profile-based elements
-	b4 = bkm.Button(label="Molec. filter",width=100)
-	cbox = bkm.CheckboxGroup(labels=["Show profile"])
-	b5 = bkm.Button(label="Energy filter",width=100)
-	thrbox = bkm.TextInput(value="%.2f" % max(edgesource.data["energy"]),width=100)
+	b4 = bkm.Button(label="Molec. filter",max_width=int(w2/5),align="center")
+	cbox = bkm.CheckboxGroup(labels=["Show profile"],max_width=int(w2/5),max_height=int(h/6),align="center")
+	b5 = bkm.Button(label="Energy filter",max_width=int(w2/5),align="center")
+	thrbox = bkm.TextInput(value="%.2f" % max(edgesource.data["energy"]),width=2*int(w2/5),align="center")
 
 	# Write the JavaScript callback to allow to avoid the Bokeh server: all is ported to JavaScript
 	# For this to work, we need to pre-load all models in the graph
@@ -631,23 +688,27 @@ def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsm
 	b3.js_on_click(js_mol_locator)
 	# Vibration selector
 	menu.js_on_event("menu_item_click",js_menu_selector)
+	
+	# New layout: by columns
+	# Left column: controls (1), network view and molecule locator
+	# Right column: mol. name, JSMol/profile view and profile controls
+	# | Load vibr.	| Modes | Clipboard	 ||	  	Mol. info 			|
+	# | 	Network visualization		 ||		JSMol // Profile		|
+	# | Location text | Loc. button		 ||		Profile options 		|
 
-	# Layout: 
-	# Upper row: controls & info. 
-	# Lower row: main visualizations
-	# | Load vibr.	|Select mode | To clipboard |  | Mol. info 		|
-	# | 	Network visualization	|		JSMol instance			|
-	# | Location text | Loc. button |	Profile options & filters	|
-	row1 = bkm.Row(b1,menu,b2,spc1,text)
-	row2 = bkm.Row(bkm.Column(bokeh_figure,bkm.Row(text_input,b3)),bkm.Column(app))
-	layout = bokeh.layouts.grid([row1,row2])
+	col1 = bkm.Column(bkm.Row(b1,menu,b2,height=hw),bokeh_figure,bkm.Row(text_input,b3,height=hw),width=sizing_dict['w1'])
+	col2 = bkm.Column(bkm.Row(spc1,text,height=hw),bkm.Row(app),width=w2)
+
+	layout = bokeh.layouts.grid([col1,col2],ncols=2)
 
 	# Add the options to see profiles if G was passed to the function and contains a pathList property
 	if (G and "pathList" in G.graph):
 		# Define elements (checkbox & button) and append them to the column containing the JSMol widget
 		# Then instantiate figure and prepare callbacks
-		layout.children[1][0].children[1].children.append(bkm.Row(cbox,b4,thrbox,b5))
-		fig_prof = profile_bokeh_plot(G,G.graph["pathList"])
+		layout.children[1][0].children.append(bkm.Row(cbox,b4,thrbox,b5,height=int(h/6)))
+
+		#layout.children[1][0].children[1].children.append(bkm.Row(cbox,b4,thrbox,b5))
+		fig_prof = profile_bokeh_plot(G,G.graph["pathList"],width=w2,height=h)
 		js_plot_modif = bkm.CustomJS(args = {"layout":layout,"prof":fig_prof,"jsmol":app}, 
 									 code = js_callback_dict["replacePlot"])
 		cbox.js_on_click(js_plot_modif)
@@ -659,7 +720,7 @@ def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsm
 		b5.js_on_click(js_select_profile_e)
 	return layout
 
-def generate_visualization(G,title,outfile,finaldir,Nvibrations=-1,with_profiles=False):
+def generate_visualization(G,title,outfile,finaldir,Nvibrations=-1,with_profiles=False,size=(1400,800)):
 	'''Wrapper function to generate HTML visualizations for a given network
 	Input:
 	- G. nx.Graph object as generated from RXReader. For profile support, it should contain a graph["pathList"] property.
@@ -671,6 +732,37 @@ def generate_visualization(G,title,outfile,finaldir,Nvibrations=-1,with_profiles
 	Output:
 	- lay. Bokeh layout as generated by full_view_layout()
 	'''
+	### Define sizing
+	w1 = int(size[0]*4/7)
+	w2 = int(size[0]*3/7)
+	wu = int(size[0]/7)
+	h = int(size[1]*6/8)
+	
+	sizing_dict = {'w1':w1,'w2':w2,'wu':wu,'h':h}
+
+	### Define custom classes
+
+	style_template = """
+	{% block postamble %}
+	<style>
+	.bk-root .bk-btn-default {
+		font-size: 1.2vh;
+	}
+	.bk-root .bk-input {
+		font-size: 1.2vh;
+		padding-bottom: 5px;
+		padding-top: 5px;
+	}
+	.bk-root .bk {
+		font-size: 1.2vh;
+	}
+	.bk-root .bk-clearfix{
+		padding-bottom: 0.8vh;
+	}
+	</style>
+	{% endblock %}
+	"""
+
 	posx = nx.spring_layout(G)
 	# Add model field to all nodes and edges & also vibrations
 	add_models(G)
@@ -679,15 +771,15 @@ def generate_visualization(G,title,outfile,finaldir,Nvibrations=-1,with_profiles
 		add_vibr_models(G)
 	
 	# Bokeh-powered visualization via RXVisualizer
-	bk_fig,bk_graph = bokeh_network_view(G,positions=posx,graph_title=title)
+	bk_fig,bk_graph = bokeh_network_view(G,positions=posx,graph_title=title,width=w1,height=h)
 	if (with_profiles):
 		# Call full_view_layout() passing the graph so it loads profiles
-		lay = full_view_layout(bk_fig,bk_graph,G)
+		lay = full_view_layout(bk_fig,bk_graph,G,sizing_dict=sizing_dict)
 	else:
-		lay = full_view_layout(bk_fig,bk_graph)
+		lay = full_view_layout(bk_fig,bk_graph,sizing_dict=sizing_dict)
 
 	bokeh.plotting.output_file(outfile,title=title)
-	bokeh.plotting.save(lay)
+	bokeh.plotting.save(lay,template=style_template)
 	
 	return lay
 
@@ -711,6 +803,8 @@ def pass_args_cmd():
 	g3 = argparser.add_argument_group("File handling")
 	g3.add_argument("--outfile",'-o',help="Name for the HTML output file",type=str,default="network.html")
 	g3.add_argument("--title",'-t',help="Title for the HTML visualization",type=str,default="Reaction network visualization")
+	g4 = argparser.add_argument_group("Aspect handling")
+	g4.add_argument("--resolution","-r",help="Size for the HTML visualization, of the form WIDTH,HEIGHT in pixels",type=str,default="1400,800")
 	try:
 		args = argparser.parse_args()
 	except:
@@ -759,8 +853,11 @@ def gen_view_cmd(args):
 			Gwork = G
 	else:
 		Gwork = G
-	# Generate the visualization
+	# Generate the visualization, parsing the size
+	width_value,height_value = [int(item) for item in args.resolution.split(",")]
 	view = generate_visualization(Gwork,title=args.title,outfile=args.outfile,finaldir=args.finaldir,
-								  Nvibrations=args.vibrations,with_profiles=paths_passed)
+								  Nvibrations=args.vibrations,with_profiles=paths_passed,size=(width_value,height_value))
 
 	return Gwork,view
+
+    
