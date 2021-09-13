@@ -201,7 +201,7 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 	posnode = bkm.ColumnDataSource(posnode_dict)
 	labels_node = bkm.LabelSet(x='xn', y='yn', text='nnames', text_font_style='bold',
 				   x_offset=0, y_offset=5, source=posnode, render_mode='canvas',
-				   text_font_size='2vh')
+				   text_font_size='1.5vh')
 	bfig.add_layout(labels_node)
 
 	# TS labels: fetch central position and name for every edge (skipping barrierless ones)
@@ -217,7 +217,7 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 	posedge = bkm.ColumnDataSource(posedge_dict)
 	labels_edge = bkm.LabelSet(x='xe', y='ye', text='enames', text_font_style='bold',text_color='red',
 				   x_offset=0, y_offset=0, source=posedge, render_mode='canvas',
-				   text_font_size='2vh')
+				   text_font_size='1.5vh')
 	bfig.add_layout(labels_edge)
 
 	# Adding tools: hover & tap. To be able to see info about both nodes and edges, we must change the inspection policy
@@ -311,8 +311,10 @@ def profile_bokeh_plot(G,profile_list,condition=[],width=600,height=600):
 	bfig = bokeh.plotting.Figure(width=width,height=height,tools="pan,wheel_zoom,reset,save",name="PROFILE")
 	#bfig.output_backend = "svg"
 	bfig.xaxis.visible = False
-	bfig.yaxis.axis_label = "E/kcal mol-1"
+	bfig.yaxis.axis_label = "E (kcal/mol)"
+	bfig.yaxis.axis_label_text_font = "Arial"
 	bfig.yaxis.axis_label_text_font_size = "1.5vh"
+	bfig.yaxis.axis_label_text_font_style = "bold"
 	bfig.yaxis.major_label_text_font_size = "1.2vh"
 	palette = bokeh.palettes.d3['Category10'][10]
 
@@ -359,8 +361,6 @@ js_callback_dict = {
 		if (cb_obj.indices.length) {
 			var ninds = nrend.selected.indices
 			var einds = erend.selected.indices
-			console.log(ninds)
-			console.log(einds)
 			if (ninds.length) {
 				var rend = nrend
 			} else {
@@ -372,7 +372,6 @@ js_callback_dict = {
 				// clear view if no model is available
 				model = "backbone only ; backbone off"
 			}
-			console.log(model)
 			var molname = rend.data["name"][ndx]
 			textField.text = "<font size=+1><b>" + molname + "</b></font>"
 			source.data["script"] = [model]
@@ -476,12 +475,10 @@ js_callback_dict = {
 			var positions = layout[mol_query]
 		}
 		// returns -1 if element is not present
-		console.log(ndx)
 		if (ndx >= 0) {
 			// clearing other sel. avoids problems for model loading sometimes
 			other_renderer.selected.indices = []
 			renderer.selected.indices = [ndx]
-			console.log(other_renderer.selected.indices)
 			fig.x_range.start = positions[0] - 0.5
 			fig.x_range.end = positions[0] + 0.5
 			fig.y_range.start = positions[1] - 0.5
@@ -506,14 +503,22 @@ js_callback_dict = {
 		var name_elem = current_fig[0]
 		var current_plot = current_fig[1]
 		var control_elem = current_fig[2]
-		
+
+		// allow to enable and disable corresponding profile control buttons
+		var bfilt1 = control_elem.children[1] 
+		var bfilt2 = control_elem.children[3] 
 		if (current_plot.properties.name.spec.value == "PROFILE"){
 			var right_col = [name_elem,jsmol,control_elem]
+			bfilt1.disabled = true
+			bfilt2.disabled = true
 		} else {
 			var right_col = [name_elem,prof,control_elem]
+			bfilt1.disabled = false
+			bfilt2.disabled = false
 		}
 		// we need to modify the children list, does not work for single substitutions
 		layout.children[1][0].children = right_col
+
 		""",
 
 		"selectProfileByMol":"""
@@ -617,6 +622,7 @@ js_callback_dict = {
 		}
 		counter[0] = ct
 		"""
+
 }
 
 def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsmol_route=None,sizing_dict={}):
@@ -653,9 +659,9 @@ def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsm
 	spc1 = bkm.Spacer(width=int(w2/2),align="center")
 	text = bkm.Div(text="(Click an element)",height=hw,align="center")
 	# For profile-based elements
-	b4 = bkm.Button(label="Molec. filter",max_width=int(w2/5),align="center")
+	b4 = bkm.Button(label="Molec. filter",max_width=int(w2/5),align="center",disabled=True)
 	cbox = bkm.CheckboxGroup(labels=["Show profile"],max_width=int(w2/5),max_height=int(h/6),align="center")
-	b5 = bkm.Button(label="Energy filter",max_width=int(w2/5),align="center")
+	b5 = bkm.Button(label="Energy filter",max_width=int(w2/5),align="center",disabled=True)
 	thrbox = bkm.TextInput(value="%.2f" % max(edgesource.data["energy"]),width=2*int(w2/5),align="center")
 
 	# Write the JavaScript callback to allow to avoid the Bokeh server: all is ported to JavaScript
