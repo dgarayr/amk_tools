@@ -166,7 +166,8 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 	
 	# Instantiate figure and graph, setting out basic parameters
 	bfig = bokeh.plotting.Figure(title=graph_title,width=width,height=height,tools="pan,wheel_zoom,box_zoom,reset,save",
-								x_range=bkm.Range1d(-1.2,1.2),y_range=bkm.Range1d(-1.2,1.2))
+				     x_range=bkm.Range1d(-1.2,1.2),y_range=bkm.Range1d(-1.2,1.2),
+				     toolbar_location="above")
 	bfig.axis.visible = False
 	bfig.xgrid.grid_line_color = None
 	bfig.ygrid.grid_line_color = None
@@ -308,7 +309,8 @@ def profile_bokeh_plot(G,profile_list,condition=[],width=600,height=600):
 	- bfig. Bokeh figure containing line plots & labels for every profile in profile_list
 	'''
 	# Initialization: instantiate figure, remove X-axis and add palette
-	bfig = bokeh.plotting.Figure(width=width,height=height,tools="pan,wheel_zoom,reset,save",name="PROFILE")
+	bfig = bokeh.plotting.Figure(width=width,height=height,tools="pan,wheel_zoom,reset,save",name="PROFILE",
+				     min_border_left=int(width/10))
 	#bfig.output_backend = "svg"
 	bfig.xaxis.visible = False
 	bfig.yaxis.axis_label = "E (kcal/mol)"
@@ -732,7 +734,6 @@ def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsm
 
 	col1 = bkm.Column(bkm.Row(b1,menu,b2,height=hw),bokeh_figure,bkm.Row(text_input,b3,height=hw),width=sizing_dict['w1'])
 	col2 = bkm.Column(bkm.Row(spc1,text,height=hw),bkm.Row(app),width=w2)
-
 	layout = bokeh.layouts.grid([col1,col2],ncols=2)
 
 	# Add the options to see profiles if G was passed to the function and contains a pathList property
@@ -742,7 +743,6 @@ def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsm
 		mol_view = [False]
 		control_row = bkm.Row(cbox,b4,thrbox,b5,height=int(h/6),height_policy="max")
 
-		#layout.children[1][0].children[1].children.append(bkm.Row(cbox,b4,thrbox,b5))
 		fig_prof = profile_bokeh_plot(G,G.graph["pathList"],width=w2,height=h)
 		js_plot_modif = bkm.CustomJS(args = {"layout":layout,"prof":fig_prof,"jsmol":app,"sizes":sizing_dict,"mol_view":mol_view}, 
 									 code = js_callback_dict["replacePlotAlt"])
