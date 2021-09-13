@@ -534,21 +534,14 @@ js_callback_dict = {
 		var bfilt2 = control_elem.children[3] 
 		console.log(mol_view)
 		if (mol_view[0] == true){
-			jsmol.height = sizes['h']
-			jsmol.width = sizes['w2']
-			prof.height = 0
-			prof.width = 0
-			prof.center[1].axis.visible = false
-			console.log(jsmol.info)
+			jsmol.visible = true
+			prof.visible = false
 			bfilt1.disabled = true
 			bfilt2.disabled = true
 			mol_view[0] = false
 		} else {
-			jsmol.height = 0
-			jsmol.width = 0
-			prof.height = sizes['h']
-			prof.width = sizes['w2']
-			prof.center[1].axis.visible = true
+			jsmol.visible = false
+			prof.visible = true
 			bfilt1.disabled = false
 			bfilt2.disabled = false
 			mol_view[0] = true
@@ -747,7 +740,7 @@ def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsm
 		# Define elements (checkbox & button) and append them to the column containing the JSMol widget
 		# Then instantiate figure and prepare callbacks
 		mol_view = [False]
-		control_row = bkm.Row(cbox,b4,thrbox,b5,height=int(h/6))
+		control_row = bkm.Row(cbox,b4,thrbox,b5,height=int(h/6),height_policy="max")
 
 		#layout.children[1][0].children[1].children.append(bkm.Row(cbox,b4,thrbox,b5))
 		fig_prof = profile_bokeh_plot(G,G.graph["pathList"],width=w2,height=h)
@@ -761,9 +754,7 @@ def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsm
 										   code = js_callback_dict["selectProfileByEnergy"])
 		b5.js_on_click(js_select_profile_e)
 		# add all to layout, with profile plot hidden
-		fig_prof.height = 0
-		fig_prof.width = 0
-		fig_prof.center[1].axis.visible = False
+		fig_prof.visible = False
 		layout.children[1][0].children.append(fig_prof)
 		layout.children[1][0].children.append(control_row)
 	return layout
