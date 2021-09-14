@@ -166,7 +166,8 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 	
 	# Instantiate figure and graph, setting out basic parameters
 	bfig = bokeh.plotting.Figure(title=graph_title,width=width,height=height,tools="pan,wheel_zoom,box_zoom,reset,save",
-								x_range=bkm.Range1d(-1.2,1.2),y_range=bkm.Range1d(-1.2,1.2))
+				     x_range=bkm.Range1d(-1.2,1.2),y_range=bkm.Range1d(-1.2,1.2),
+				     toolbar_location="above")
 	bfig.axis.visible = False
 	bfig.xgrid.grid_line_color = None
 	bfig.ygrid.grid_line_color = None
@@ -308,7 +309,8 @@ def profile_bokeh_plot(G,profile_list,condition=[],width=600,height=600):
 	- bfig. Bokeh figure containing line plots & labels for every profile in profile_list
 	'''
 	# Initialization: instantiate figure, remove X-axis and add palette
-	bfig = bokeh.plotting.Figure(width=width,height=height,tools="pan,wheel_zoom,reset,save",name="PROFILE")
+	bfig = bokeh.plotting.Figure(width=width,height=height,tools="pan,wheel_zoom,reset,save",name="PROFILE",
+				     min_border_left=int(width/10))
 	#bfig.output_backend = "svg"
 	bfig.xaxis.visible = False
 	bfig.yaxis.axis_label = "E (kcal/mol)"
@@ -497,27 +499,32 @@ js_callback_dict = {
 		source.properties.data.change.emit()
 		""",
 
-		"replacePlot":"""
+    		"replacePlot":"""
 		//layout - full layout, jsmol - jsmol app (where the profile window will appear), prof - profile
+		//mol_view - boolean for current view
 		var current_fig = layout.children[1][0].children
 		var name_elem = current_fig[0]
-		var current_plot = current_fig[1]
-		var control_elem = current_fig[2]
+		var jsmol_plot = current_fig[1]
+		var prof_plot = current_fig[2]
+		var control_elem = current_fig[3]
 
 		// allow to enable and disable corresponding profile control buttons
 		var bfilt1 = control_elem.children[1] 
 		var bfilt2 = control_elem.children[3] 
-		if (current_plot.properties.name.spec.value == "PROFILE"){
-			var right_col = [name_elem,jsmol,control_elem]
+		console.log(mol_view)
+		if (mol_view[0] == true){
+			jsmol.visible = true
+			prof.visible = false
 			bfilt1.disabled = true
 			bfilt2.disabled = true
+			mol_view[0] = false
 		} else {
-			var right_col = [name_elem,prof,control_elem]
+			jsmol.visible = false
+			prof.visible = true
 			bfilt1.disabled = false
 			bfilt2.disabled = false
+			mol_view[0] = true
 		}
-		// we need to modify the children list, does not work for single substitutions
-		layout.children[1][0].children = right_col
 
 		""",
 
@@ -704,18 +711,17 @@ def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsm
 
 	col1 = bkm.Column(bkm.Row(b1,menu,b2,height=hw),bokeh_figure,bkm.Row(text_input,b3,height=hw),width=sizing_dict['w1'])
 	col2 = bkm.Column(bkm.Row(spc1,text,height=hw),bkm.Row(app),width=w2)
-
 	layout = bokeh.layouts.grid([col1,col2],ncols=2)
 
 	# Add the options to see profiles if G was passed to the function and contains a pathList property
 	if (G and "pathList" in G.graph):
 		# Define elements (checkbox & button) and append them to the column containing the JSMol widget
 		# Then instantiate figure and prepare callbacks
-		layout.children[1][0].children.append(bkm.Row(cbox,b4,thrbox,b5,height=int(h/6)))
+		mol_view = [False]
+		control_row = bkm.Row(cbox,b4,thrbox,b5,height=int(h/6),height_policy="max")
 
-		#layout.children[1][0].children[1].children.append(bkm.Row(cbox,b4,thrbox,b5))
 		fig_prof = profile_bokeh_plot(G,G.graph["pathList"],width=w2,height=h)
-		js_plot_modif = bkm.CustomJS(args = {"layout":layout,"prof":fig_prof,"jsmol":app}, 
+		js_plot_modif = bkm.CustomJS(args = {"layout":layout,"prof":fig_prof,"jsmol":app,"mol_view":mol_view}, 
 									 code = js_callback_dict["replacePlot"])
 		cbox.js_on_click(js_plot_modif)
 		js_select_profile_mol = bkm.CustomJS(args = {"graph":bokeh_graph,"prof":fig_prof}, 
@@ -724,6 +730,10 @@ def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsm
 		js_select_profile_e = bkm.CustomJS(args = {"prof":fig_prof,"thrbox":thrbox}, 
 										   code = js_callback_dict["selectProfileByEnergy"])
 		b5.js_on_click(js_select_profile_e)
+		# add all to layout, with profile plot hidden at the start
+		fig_prof.visible = False
+		layout.children[1][0].children.append(fig_prof)
+		layout.children[1][0].children.append(control_row)
 	return layout
 
 def generate_visualization(G,title,outfile,finaldir,Nvibrations=-1,with_profiles=False,size=(1400,800)):
