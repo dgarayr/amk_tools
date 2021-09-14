@@ -499,32 +499,9 @@ js_callback_dict = {
 		source.properties.data.change.emit()
 		""",
 
-		"replacePlot":"""
+    		"replacePlot":"""
 		//layout - full layout, jsmol - jsmol app (where the profile window will appear), prof - profile
-		var current_fig = layout.children[1][0].children
-		var name_elem = current_fig[0]
-		var current_plot = current_fig[1]
-		var control_elem = current_fig[2]
-
-		// allow to enable and disable corresponding profile control buttons
-		var bfilt1 = control_elem.children[1] 
-		var bfilt2 = control_elem.children[3] 
-		if (current_plot.properties.name.spec.value == "PROFILE"){
-			var right_col = [name_elem,jsmol,control_elem]
-			bfilt1.disabled = true
-			bfilt2.disabled = true
-		} else {
-			var right_col = [name_elem,prof,control_elem]
-			bfilt1.disabled = false
-			bfilt2.disabled = false
-		}
-		// we need to modify the children list, does not work for single substitutions
-		layout.children[1][0].children = right_col
-
-		""",
-    		"replacePlotAlt":"""
-		//layout - full layout, jsmol - jsmol app (where the profile window will appear), prof - profile
-		//sizes - dict with elem size info, mol_view - boolean for current view
+		//mol_view - boolean for current view
 		var current_fig = layout.children[1][0].children
 		var name_elem = current_fig[0]
 		var jsmol_plot = current_fig[1]
@@ -744,8 +721,8 @@ def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsm
 		control_row = bkm.Row(cbox,b4,thrbox,b5,height=int(h/6),height_policy="max")
 
 		fig_prof = profile_bokeh_plot(G,G.graph["pathList"],width=w2,height=h)
-		js_plot_modif = bkm.CustomJS(args = {"layout":layout,"prof":fig_prof,"jsmol":app,"sizes":sizing_dict,"mol_view":mol_view}, 
-									 code = js_callback_dict["replacePlotAlt"])
+		js_plot_modif = bkm.CustomJS(args = {"layout":layout,"prof":fig_prof,"jsmol":app,"mol_view":mol_view}, 
+									 code = js_callback_dict["replacePlot"])
 		cbox.js_on_click(js_plot_modif)
 		js_select_profile_mol = bkm.CustomJS(args = {"graph":bokeh_graph,"prof":fig_prof}, 
 											 code = js_callback_dict["selectProfileByMol"])
@@ -753,7 +730,7 @@ def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsm
 		js_select_profile_e = bkm.CustomJS(args = {"prof":fig_prof,"thrbox":thrbox}, 
 										   code = js_callback_dict["selectProfileByEnergy"])
 		b5.js_on_click(js_select_profile_e)
-		# add all to layout, with profile plot hidden
+		# add all to layout, with profile plot hidden at the start
 		fig_prof.visible = False
 		layout.children[1][0].children.append(fig_prof)
 		layout.children[1][0].children.append(control_row)
