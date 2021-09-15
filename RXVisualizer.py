@@ -291,10 +291,13 @@ def profile_datasourcer(G,profile_list):
 		# Prepare the lines, as in arx.theor_profile_plotter(), duplicating entries
 		xvals = np.arange(0,2*len(working_prof))
 		energies = [arx.simple_prop_fetch(G,entry,"energy") for entry in working_prof]
+		# formulas shall only be fetched for PRODUCTS
+		formulas = [arx.simple_prop_fetch(G,entry,"formula") if "PR" in entry else None for entry in working_prof]
 		yvals = [e for evalue in energies for e in (evalue,evalue)]
 		labels = [lab for labvalue in cleaned_prof for lab in (labvalue,labvalue)]
+		formula_col = [form for formula in formulas for form in (formula,formula)]
 		# save as ColumnDataSource
-		prof_cds = bkm.ColumnDataSource(data={"x":xvals,"y":yvals,"lab":labels})
+		prof_cds = bkm.ColumnDataSource(data={"x":xvals,"y":yvals,"lab":labels,"form":formula_col})
 		cds_list.append(prof_cds)
 	return cds_list
 
@@ -322,7 +325,6 @@ def profile_bokeh_plot(G,profile_list,condition=[],width=600,height=600):
 
 	# Generate the list of ColumnDataSources
 	cds_paths = profile_datasourcer(G,profile_list)
-
 	# Check condition
 	if (len(condition) != len(profile_list)):
 		condition = [True for prof in profile_list]
@@ -346,9 +348,33 @@ def profile_bokeh_plot(G,profile_list,condition=[],width=600,height=600):
 		rx_rect.visible = condition[ii]
 		rx_label.visible = condition[ii]
 
-	# And add the hover
-	hover_prof = bkm.HoverTool(description="Profile hover",tooltips=[("tag","@lab"),("E","@y{%.2f}")],
+	# And add the hover, with custom callback to hide the "formula" field outside products
+	hover_prof = bkm.HoverTool(description="Profile hover",tooltips=[("tag","@lab"),("E","@y{%.2f}"),("formula","@form")],
 							   formatters={"@y":"printf"},renderers=skeleton_lines)
+	hover_profJS = '''
+	// all renderers are checked at once: when the triggered one is caught (by changes in cb_data.index.line_indices)
+	// access its data_source directly
+	if (cb_data.index.line_indices.length > 0) {
+		var ndx = cb_data.index.line_indices[0]
+		var rend_obj = cb_data.renderer.data_source
+		var formula_list = rend_obj.data["form"]
+
+	// fallback for cases without any fragmentation, where formula is not defined
+	    if (formula_list){
+			var formula = formula_list[ndx]
+		} else {
+			var formula = null
+		}
+	    if (!formula){
+			hover.tooltips = [["tag","@lab"],["E","@y{%.2f}"]]
+ 		} else {
+			hover.tooltips = [["tag","@lab"],["E","@y{%.2f}"],["formula","@form"]]
+		}
+	}
+	'''
+
+	hover_prof.callback = bkm.CustomJS(args=dict(hover=hover_prof),code=hover_profJS)
+	
 	bfig.add_tools(hover_prof)
 	bfig.js_on_event('reset',bkm.CustomJS(args = {"prof":bfig}, code = js_callback_dict["resetProfile"]))
 	return bfig
@@ -846,14 +872,14 @@ def gen_view_cmd(args):
 	G = arx.RX_builder(finaldir=args.finaldir,data=data)
 	# Path handling: several situations are possible: i) SOURCE and TARGET, ii) only SOURCE, iii) not SOURCE nor TARGET, iv) --paths not passed
 	# For i), ii) and iii), paths shall be added, and args.paths will be a LIST
+	# Also, several sources or targets can be passed, comma-separated
 	paths_passed = isinstance(args.paths,list)
 	if (paths_passed):
-		# Fully specified path
 		if (len(args.paths) == 2):
-			source,target = args.paths
+			source,target = [item.split(",") for item in args.paths]
 			limits = arx.node_synonym_search(G,[source,target])
 		elif (len(args.paths) == 1):
-			source = args.paths
+			source = args.paths[0].split(",")
 			target = None
 			limits = arx.node_synonym_search(G,[source])
 			limits.append([])
