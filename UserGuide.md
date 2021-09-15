@@ -62,9 +62,9 @@ A basic Python script allowing to generate a complete visualization from scratch
     bokeh.plotting.output_file("Network.html",title="Network visualization for MOL")
 ```
 
-Alternatively, the more simple commandline script `run_commandline.py` allows to generate visualizations directly taking arguments from STDIN.
+Alternatively, the more simple commandline script `amk_gen_view.py` allows to generate visualizations directly taking arguments from STDIN.
 
-`$python run_commandline.py FINALDIR RXNFILE`, where **FINALDIR** is the folder containing AMK results and **RXNFILE** is the name of the RXNet file to be used (RXNet, RXNet.cg or RXNet.rel). Additional arguments that may be passed are:
+`$./amk_gen_view.py FINALDIR RXNFILE`, where **FINALDIR** is the folder containing AMK results and **RXNFILE** is the name of the RXNet file to be used (RXNet, RXNet.cg or RXNet.rel). Additional arguments that may be passed are:
 
 - **--barrierless**. Include the barrierless routes stored in *RXNet.barrless*.
 - **--vibrations NVIBR**. Add only *NVIBR* normal modes to the visualization. Default is -1, meaning that ALL modes are included.
