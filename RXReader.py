@@ -11,6 +11,7 @@ import matplotlib.collections as collections
 import matplotlib.text
 import itertools
 import networkx as nx
+from collections import defaultdict
 
 # Constant definitions (from scipy.constants, redefined to avoid additional dependencies)
 hartree_J = 4.3597447222071e-18
@@ -539,7 +540,7 @@ def formula_dict_constructor(G):
 	prod_list = [nd for nd in G.nodes(data=True) if ("PR" in nd[0] or "PROD" in nd[0])]
 	formulae = [nd[1]["formula"].replace(" ","") for nd in prod_list]
 	prod_names = [nd[0] for nd in prod_list]
-	formula_map = {}
+	formula_map = defaultdict(lambda:[None])
 	# Take care: a formula may map to several products
 	for name,form in zip(prod_names,formulae):
 		if (form not in formula_map.keys()):
@@ -563,7 +564,12 @@ def formula_locator(G,formula):
 		formula_map = formula_dict_constructor(G)
 	formula_format = formula.replace(" ","")
 	prod_list = formula_map[formula_format]
-	return prod_list
+	# Also check whether the formula is there but reversed!
+	rev_formula = "+".join(formula_format.split("+")[::-1])
+	prod_list += formula_map[rev_formula]
+	# clean up any Nne entries
+	clean_prod_list = [prod for prod in prod_list if prod]
+	return clean_prod_list
 
 def product_collapser(G):
 	'''Contract all equivalent products in the graph to a single node. Check energies to select the most stable product.
@@ -747,9 +753,11 @@ def add_paths(G,source_collection=[],target_collection=[],cutoff=1,skip_int_frag
 	else:
 		# If source or target (or both!) are undefined, find all profiles
 		all_possible_paths = theor_cycle_branch_builder(G,start_node=G.graph["ref_struc"])
-	# If any node is provided as source OR target, filter all_possible_paths to remove these not containing the ref node(s)
+	# Better filtering: do not use node presence BUT node connectivity to the reference
+	# Keep a path if its first node is connected to ANY reference (although this will always happen if the network
+	# is fully connected)
 	if (reference_nodes):
-		found_paths = [path for path in all_possible_paths if any(nd in path for nd in reference_nodes)]
+		found_paths = [path for path in all_possible_paths if any(nx.has_path(G,path[0],nd) for nd in reference_nodes)]
 	else:
 		found_paths = all_possible_paths
 	full_paths = path_reformatter(G,found_paths)

@@ -68,10 +68,18 @@ Alternatively, the more simple commandline script `amk_gen_view.py` allows to ge
 
 - **--barrierless**. Include the barrierless routes stored in *RXNet.barrless*.
 - **--vibrations NVIBR**. Add only *NVIBR* normal modes to the visualization. Default is -1, meaning that ALL modes are included.
-- **--paths [SOURCE] [TARGET]** Locate paths in the network connecting SOURCE to TARGET, to include energy profile visualizations in the dashboards. When both SOURCE and TARGET are specified, a simple search is performed including only the routes that connect both nodes. If *--paths* is passed without further specification, all possible cyclic paths along the network are searched (much slower). If only SOURCE is specified, all cyclic paths are also searched, and then filtered to only keep these containing SOURCE.
+- **--paths [SOURCE] [TARGET]** Locate paths in the network connecting SOURCE to TARGET, to include energy profile visualizations in the dashboards. When both SOURCE and TARGET are specified, a simple search is performed including only the routes that connect both nodes. If *--paths* is passed without further specification, all possible cyclic paths along the network are searched (much slower). If only SOURCE is specified, all cyclic paths are also searched, and then filtered to only keep these with connections to SOURCE.
 - **--cutoff_path CUTOFF**. Maximum depth for two-ended path search (number of intermediate nodes between SOURCE and TARGET), default is 4.
 - **--outfile FILENAME**. Name of the output HTML file containing the dashboard.
 - **--title TITLE**. Title shown in the dashboard.
+
+### Path specification: sources and targets.
+Path location in *amk_rxreader* (either via the commandline interface, with the **--paths** argument, or through directly calling **add_paths()** in a Python script) allows a somehow flexible specification of source and target nodes.
++ *MINX* and *PRODX* labels can be used to specify a single source or target node.
++ For products, a formula *A+B* can also be specified, thus locating ALL *PRODX* tags matching the requested formula.
++ Several sources (or targets) can be specified at once, searching for all possible combinations between sources and targets.
++ When using `amk_gen_view.py`, multiple labels or product formulas should be separated by commas.
++ When calling the Python function `add_paths(G, [sources], [targets])`, multiple labels or product formulas are given as lists.
 
 
 ## Dependencies
