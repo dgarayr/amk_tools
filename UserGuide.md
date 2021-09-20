@@ -52,9 +52,9 @@ A basic Python script allowing to generate a complete visualization from scratch
     
     # From the graph G read in the parsing step:
     arxviz.add_models(G)                          # add XYZ geometry models to the graph
-    arx.vibr_displ_parser(finaldir,G)           # locate ALL normal modes and add them to the graph
+    arx.vibr_displ_parser(finaldir,G)             # locate ALL normal modes and add them to the graph
     arxviz.add_vibr_models(G)                     # add geometry models to the graph
-    arx.add_paths(G,["MIN1"],["PROD1","PROD2"])   # add all paths from MIN1 to PROD1 and PROD2
+    arx.add_paths(G,["MIN1"],["PR1","PR2"])       # add all paths from MIN1 to PR1 and PR2
     # Set up visualization
     bk_fig,bk_graph = arxviz.bokeh_network_view(G,positions=posx)
     layout = arxviz.full_view_layout(bk_fig,bk_graph)
