@@ -62,9 +62,9 @@ A basic Python script allowing to generate a complete visualization from scratch
     bokeh.plotting.output_file("Network.html",title="Network visualization for MOL")
 ```
 
-Alternatively, the more simple commandline script `amk_gen_view.py` allows to generate visualizations directly taking arguments from STDIN.
+Alternatively, the more simple commandline script `amk_gen_view.py` allows to generate visualizations directly taking arguments from STDIN. If the corresponding directory is in the *PATH*:
 
-`$./amk_gen_view.py FINALDIR RXNFILE`, where **FINALDIR** is the folder containing AMK results and **RXNFILE** is the name of the RXNet file to be used (RXNet, RXNet.cg or RXNet.rel). Additional arguments that may be passed are:
+`$amk_gen_view.py FINALDIR RXNFILE`, where **FINALDIR** is the folder containing AMK results and **RXNFILE** is the name of the RXNet file to be used (RXNet, RXNet.cg or RXNet.rel). Additional arguments that may be passed are:
 
 - **--barrierless**. Include the barrierless routes stored in *RXNet.barrless*.
 - **--vibrations NVIBR**. Add only *NVIBR* normal modes to the visualization. Default is -1, meaning that ALL modes are included.
@@ -76,7 +76,7 @@ Alternatively, the more simple commandline script `amk_gen_view.py` allows to ge
 ### Path specification: sources and targets.
 Path location in *amk_rxreader* (either via the commandline interface, with the **--paths** argument, or through directly calling **add_paths()** in a Python script) allows a somehow flexible specification of source and target nodes.
 + *MINX* and *PRODX* labels can be used to specify a single source or target node.
-+ For products, a formula *A+B* can also be specified, thus locating ALL *PRODX* tags matching the requested formula.
++ For products, a formula *A+B* (no blank spaces) can also be specified, thus locating ALL *PRODX* tags matching the requested formula. Formulas can be found in the *RXNet* files or in the *rxn_all.txt* file.
 + Several sources (or targets) can be specified at once, searching for all possible combinations between sources and targets.
 + When using `amk_gen_view.py`, multiple labels or product formulas should be separated by commas.
 + When calling the Python function `add_paths(G, [sources], [targets])`, multiple labels or product formulas are given as lists.

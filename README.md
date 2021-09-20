@@ -15,14 +15,14 @@ The *amk-rxreader* library provides tools to read, process and visualize the rea
 These dashboards are generated as independent HTML files, not requiring a live Python server.
 
 ## Usage guidelines
-The simplest way to generate a dashboard from AutoMeKin	results is to call the `amk_gen_view.py` script, taking arguments from STDIN.
+The simplest way to generate a dashboard from AutoMeKin	results is to call the `amk_gen_view.py` script, taking arguments from STDIN. If the corresponding directory is in the *PATH*:
 
-`$./amk_gen_view.py FINALDIR RXNFILE`, where **FINALDIR** is the folder containing AMK results and **RXNFILE** is the name of the RXNet file to be used (RXNet, RXNet.cg or RXNet.rel). Additional arguments that may be passed are:
+`$amk_gen_view.py FINALDIR RXNFILE`, where **FINALDIR** is the folder containing AMK results and **RXNFILE** is the name of the RXNet file to be used (RXNet, RXNet.cg or RXNet.rel). Additional arguments that may be passed are:
 
 - **--barrierless**. Include the barrierless routes stored in *RXNet.barrless*.
 - **--vibrations NVIBR**. Add only *NVIBR* normal modes to the visualization. Default is -1, meaning that ALL modes are included.
-- **--paths [SOURCE] [TARGET]** Locate paths in the network connecting SOURCE to TARGET, to include energy profile visualizations in the dashboards. When both SOURCE and TARGET are specified, a simple search is performed including only the routes that connect both nodes. If *--paths* is passed without further specification, all possible cyclic paths along the network are searched (much slower). If only SOURCE is specified, all cyclic paths are also searched, and then filtered to only keep these containing SOURCE.
-- **--cutoff_path CUTOFF**. Maximum depth for bi-ended path search (number of intermediate nodes between SOURCE and TARGET), default is 4.
+- **--paths [SOURCE] [TARGET]** Locate paths in the network connecting SOURCE to TARGET, to include energy profile visualizations in the dashboards. When both SOURCE and TARGET are specified, a simple search is performed including only the routes that connect both nodes. If *--paths* is passed without further specification, all possible cyclic paths along the network are searched (much slower). If only SOURCE is specified, all cyclic paths are also searched, and then filtered to only keep these with connections to SOURCE.
+- **--cutoff_path CUTOFF**. Maximum depth for two-ended path search (number of intermediate nodes between SOURCE and TARGET), default is 4.
 - **--outfile FILENAME**. Name of the output HTML file containing the dashboard.
 - **--title TITLE**. Title shown in the dashboard.
 
