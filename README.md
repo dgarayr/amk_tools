@@ -15,7 +15,7 @@ The *amk-rxreader* library provides tools to read, process and visualize the rea
 These dashboards are generated as independent HTML files, not requiring a live Python server.
 
 ## Usage guidelines
-The simplest way to generate a dashboard from AutoMeKin	results is to call the `amk_gen_view.py` script, taking arguments from STDIN. If the corresponding directory is in the *PATH*:
+The simplest way to generate a dashboard from AutoMeKin	results is to call the `amk_gen_view.py` script, taking arguments from STDIN (Include the *amk-reader* directory in your `$PATH`:
 
 `$amk_gen_view.py FINALDIR RXNFILE`, where **FINALDIR** is the folder containing AMK results and **RXNFILE** is the name of the RXNet file to be used (RXNet, RXNet.cg or RXNet.rel). Additional arguments that may be passed are:
 
