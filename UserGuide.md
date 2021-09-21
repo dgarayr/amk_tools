@@ -82,8 +82,13 @@ Path location in *amk_rxreader* (either via the commandline interface, with the 
 + When calling the Python function `add_paths(G, [sources], [targets])`, multiple labels or product formulas are given as lists.
 
 ### Examples of usage.
-The following example shows how to create interactive plots from **RXNet.cg** file including all paths:
+The following example shows how to create interactive plots from **RXNet.cg** file including all paths found at low level for Formic Acid (FA):
+
 `amk_gen_view.py FINAL_LL_FA RXNet.cg --b --paths`
+
+While this one creates the corresponding plots for the paths that connect MIN1 with the H2 + CO2 products:
+
+`amk_gen_view.py FINAL_LL_FA RXNet.cg --paths MIN1 H2+CO2`
 
 ## Dependencies
 + NetworkX 
