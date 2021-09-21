@@ -81,6 +81,9 @@ Path location in *amk_rxreader* (either via the commandline interface, with the 
 + When using `amk_gen_view.py`, multiple labels or product formulas should be separated by commas.
 + When calling the Python function `add_paths(G, [sources], [targets])`, multiple labels or product formulas are given as lists.
 
+### Examples of usage.
+The following example shows how to create interactive plots from **RXNet.cg** file including all paths:
+`amk_gen_view.py FINAL_LL_FA RXNet.cg --b --paths`
 
 ## Dependencies
 + NetworkX 
