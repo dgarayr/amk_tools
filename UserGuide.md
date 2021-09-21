@@ -86,7 +86,7 @@ The following example shows how to create interactive plots from RXNet.cg file i
 
 `$amk_gen_view.py FINAL_LL_FA RXNet.cg --b --paths`
 
-While this one creates the corresponding plots for the paths that connect MIN1 with the $H_{2}$ + $CO_{2}$ products:
+While this one creates the corresponding plots for the paths that connect MIN1 with the H<sub>2</sub> + CO<sub>2</sub> products:
 
 `$amk_gen_view.py FINAL_LL_FA RXNet.cg --paths MIN1 H2+CO2`
 
