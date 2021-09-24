@@ -258,13 +258,11 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 
 	# allow to hide tags, using a CustomAction
 	# prepare simple 8x8 icon as a numpy array (8x8x3 for RGB)
-
 	icon = np.zeros((8,8,3),dtype=np.uint8)
 	# grey border and white inner region
 	icon.fill(200)
-	icon[1]
 	icon[1:-1,1:-1,:] = 255
-	hide_count = 1
+	hide_count = 1		# inner state for the action
 	hide_js = bkm.CustomJS(args={"figure":bfig,"counter":[hide_count]},code=js_callback_dict["hideLabels"])
 	hide_action = bkm.CustomAction(icon=icon,callback=hide_js,description="Hide labels")
 	bfig.add_tools(hide_action)
@@ -338,15 +336,19 @@ def profile_bokeh_plot(G,profile_list,condition=[],width=600,height=600):
 		skeleton_lines.append(rx_line)
 		# Prepare labels, slicing the original CDS to avoid repetitions
 		cds_lab = bkm.ColumnDataSource({k:cdspath.data[k][::2] for k in ["x","y","lab"]})
+		cds_lab.data["elab"] = ["%.1f" % float(e) for e in cds_lab.data["y"]]
 		cds_lab.data["x"] = [(float(item) + 0.5) for item in cds_lab.data["x"]]
 		rect = bkm.Rect(x="x",y="y",fill_color=palette[cndx],fill_alpha=0.9,width=1,height=2,line_width=0,name="RECTANGLE")
 		rx_rect = bfig.add_glyph(cds_lab,rect)
 		rx_label = bkm.LabelSet(x="x",y="y",text="lab",source=cds_lab,x_offset=-1,y_offset=1,name="THELABELS")
 		bfig.add_layout(rx_label)
+		energy_label = bkm.LabelSet(x="x",y="y",text="elab",source=cds_lab,y_offset=-20,name="ENERGYLABELS")
+		bfig.add_layout(energy_label)
 		### Add filtering: hide when filter condition is not fulfilled
 		rx_line.visible = condition[ii]
 		rx_rect.visible = condition[ii]
 		rx_label.visible = condition[ii]
+		energy_label.visible = False
 
 	# And add the hover, with custom callback to hide the "formula" field outside products
 	hover_prof = bkm.HoverTool(description="Profile hover",tooltips=[("tag","@lab"),("E","@y{%.2f}"),("formula","@form")],
@@ -536,8 +538,7 @@ js_callback_dict = {
 
 		// allow to enable and disable corresponding profile control buttons
 		var bfilt1 = control_elem.children[1] 
-		var bfilt2 = control_elem.children[3] 
-		console.log(mol_view)
+		var bfilt2 = control_elem.children[3]
 		if (mol_view[0] == true){
 			jsmol.visible = true
 			prof.visible = false
@@ -570,7 +571,10 @@ js_callback_dict = {
 			// make everything visible
 			for (let [index,line] of prof.renderers.entries()){
 				prof.renderers[index].visible = true
-				prof.center[index+2].visible = true
+				// only EVEN entries for center
+				if (index % 2 == 0){
+					prof.center[index+2].visible = true
+				}
 			} 
 			return true
 		}
@@ -587,8 +591,9 @@ js_callback_dict = {
 			if (!labels.includes(sel_spc)){
 				prof.renderers[index].visible = false
 				prof.renderers[index+1].visible = false
-				// use i to map the labels, which are not duplicated
-				prof.center[i+2].visible = false
+				// labels are also duplicated: first tag, then energy.
+				prof.center[index+2].visible = false
+				prof.center[index+3].visible = false
 			} 
 		prof.properties.renderers.change.emit()
 		}
@@ -611,8 +616,9 @@ js_callback_dict = {
 			if (energies.some(overThreshold)){
 				prof.renderers[index].visible = false
 				prof.renderers[index+1].visible = false
-				// use i to map the labels, which are not duplicated
-				prof.center[i+2].visible = false
+				// labels are also duplicated: first tag, then energy.
+				prof.center[index+2].visible = false
+				prof.center[index+3].visible = false
 			} 
 		}
 		""",
@@ -625,7 +631,10 @@ js_callback_dict = {
 			const index = 2*i
 			prof.renderers[index].visible = true
 			prof.renderers[index+1].visible = true
-			prof.center[i+2].visible = true
+			// tags are EVEN entries and energies are ODD
+			prof.center[index+2].visible = true
+			prof.center[index+3].visible = false
+			console.log(prof.center[index+3].text,prof.center[index+3].visible)
 		}
 		""",
 
@@ -654,7 +663,21 @@ js_callback_dict = {
 			ct = 0
 		}
 		counter[0] = ct
-		"""
+		""",
+
+	"showEnergyLabels":"""
+	// show ENERGY labels for the profile
+	// prof - bokeh profile for figures, state - counter for the inner state
+	state[0] = !state[0]
+	var Nlines = prof.renderers.length/2
+	for (let i = 0 ; i < Nlines ; i++){
+		// show or hide for ODD ii values (energy label) AND only for visible renderers
+		var jj = 2*i + 1
+		if (prof.renderers[jj-1].visible == true){
+			prof.center[jj+2].visible = state[0]
+		} 
+	}
+	"""
 
 }
 
@@ -696,7 +719,6 @@ def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsm
 	cbox = bkm.CheckboxGroup(labels=["Show profile"],max_width=int(w2/5),max_height=int(h/6),align="center")
 	b5 = bkm.Button(label="Energy filter",max_width=int(w2/5),align="center",disabled=True)
 	thrbox = bkm.TextInput(value="%.2f" % max(edgesource.data["energy"]),width=2*int(w2/5),align="center")
-
 	# Write the JavaScript callback to allow to avoid the Bokeh server: all is ported to JavaScript
 	# For this to work, we need to pre-load all models in the graph
 	js_load_mol = bkm.CustomJS(args = {"graph":bokeh_graph,"source":script_source,"textField":text}, 
@@ -756,6 +778,18 @@ def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsm
 		js_select_profile_e = bkm.CustomJS(args = {"prof":fig_prof,"thrbox":thrbox}, 
 										   code = js_callback_dict["selectProfileByEnergy"])
 		b5.js_on_click(js_select_profile_e)
+
+		elabel_state = False
+		# Add a CustomAction here for energy label management
+		js_show_elabels = bkm.CustomJS(args={"prof":fig_prof,"state":[elabel_state]},
+										code = js_callback_dict["showEnergyLabels"])
+		# custom icon
+		iconE = np.full(shape=(8,8,3),fill_value=255,dtype=np.uint8)
+		iconE[np.ix_([1,4,7]),1:-1,:] = 200
+		iconE[1:-1,1,:] = 200
+		elabel_action = bkm.CustomAction(icon=iconE,callback=js_show_elabels,description="Show energy labels")
+		fig_prof.add_tools(elabel_action)
+		
 		# add all to layout, with profile plot hidden at the start
 		fig_prof.visible = False
 		layout.children[1][0].children.append(fig_prof)

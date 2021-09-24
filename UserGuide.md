@@ -44,11 +44,15 @@ A basic Python script allowing to generate a complete visualization from scratch
 ``` python
     import RXReader as arx
     import RXVisualizer as arxviz
+    import networkx as nx
+    
     # Parsing
     finaldir = "FINAL_LL_MOL"
     rxnfile = "RXNet.cg"
     data = arx.RX_parser(finaldir,rxnfile)
     G = arx.RX_builder(finaldir,data)
+    
+    posx = nx.kamada_kawai_layout(G)
     
     # From the graph G read in the parsing step:
     arxviz.add_models(G)                          # add XYZ geometry models to the graph
@@ -61,6 +65,30 @@ A basic Python script allowing to generate a complete visualization from scratch
     # Save to HTML file
     bokeh.plotting.output_file("Network.html",title="Network visualization for MOL")
 ```
+
+The wrapper function `arxviz.generate_visualization()` allows to simplify the protocol above:
+``` python
+    import RXReader as arx
+    import RXVisualizer as arxviz
+    # Parsing
+    finaldir = "FINAL_LL_MOL"
+    rxnfile = "RXNet.cg"
+    data = arx.RX_parser(finaldir,rxnfile)
+    G = arx.RX_builder(finaldir,data)
+   
+    lay = arxviz.generate_visualization()
+    # From the graph G read in the parsing step:
+    arxviz.add_models(G)                          # add XYZ geometry models to the graph
+    arx.vibr_displ_parser(finaldir,G)             # locate ALL normal modes and add them to the graph
+    arxviz.add_vibr_models(G)                     # add geometry models to the graph
+    arx.add_paths(G,["MIN1"],["PR1","PR2"])       # add all paths from MIN1 to PR1 and PR2
+    # Set up visualization
+    bk_fig,bk_graph = arxviz.bokeh_network_view(G,positions=posx)
+    layout = arxviz.full_view_layout(bk_fig,bk_graph)
+    # Save to HTML file
+    bokeh.plotting.output_file("Network.html",title="Network visualization for MOL")
+```
+
 
 Alternatively, the more simple commandline script `amk_gen_view.py` allows to generate visualizations directly taking arguments from STDIN. If the corresponding directory is in the *PATH*:
 
