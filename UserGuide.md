@@ -73,7 +73,7 @@ Alternatively, the more simple commandline script `amk_gen_view.py` allows to ge
 - **--outfile FILENAME**. Name of the output HTML file containing the dashboard.
 - **--title TITLE**. Title shown in the dashboard.
 
-### Path specification: sources and targets.
+### Path specification: sources and targets
 Path location in *amk_rxreader* (either via the commandline interface, with the **--paths** argument, or through directly calling **add_paths()** in a Python script) allows a somehow flexible specification of source and target nodes.
 + *MINX* and *PRODX* labels can be used to specify a single source or target node.
 + For products, a formula *A+B* (no blank spaces) can also be specified, thus locating ALL *PRODX* tags matching the requested formula. Formulas can be found in the *RXNet* files or in the *rxn_all.txt* file.
@@ -81,6 +81,14 @@ Path location in *amk_rxreader* (either via the commandline interface, with the 
 + When using `amk_gen_view.py`, multiple labels or product formulas should be separated by commas.
 + When calling the Python function `add_paths(G, [sources], [targets])`, multiple labels or product formulas are given as lists.
 
+### Examples of usage
+The following example shows how to create interactive plots from RXNet.cg file including all paths found at low level for Formic Acid (FA):
+
+`$amk_gen_view.py FINAL_LL_FA RXNet.cg --b --paths`
+
+While this one creates the corresponding plots for the paths that connect MIN1 with the H<sub>2</sub> + CO<sub>2</sub> products:
+
+`$amk_gen_view.py FINAL_LL_FA RXNet.cg --paths MIN1 H2+CO2`
 
 ## Dependencies
 + NetworkX 
