@@ -55,10 +55,10 @@ A basic Python script allowing to generate a complete visualization from scratch
     posx = nx.kamada_kawai_layout(G)
     
     # From the graph G read in the parsing step:
+    arx.add_paths(G,["MIN1"],["PR1","PR2"])       # add all paths from MIN1 to PR1 and PR2
     arxviz.add_models(G)                          # add XYZ geometry models to the graph
     arx.vibr_displ_parser(finaldir,G)             # locate ALL normal modes and add them to the graph
     arxviz.add_vibr_models(G)                     # add geometry models to the graph
-    arx.add_paths(G,["MIN1"],["PR1","PR2"])       # add all paths from MIN1 to PR1 and PR2
     # Set up visualization
     bk_fig,bk_graph = arxviz.bokeh_network_view(G,positions=posx)
     layout = arxviz.full_view_layout(bk_fig,bk_graph)
@@ -75,20 +75,16 @@ The wrapper function `arxviz.generate_visualization()` allows to simplify the pr
     rxnfile = "RXNet.cg"
     data = arx.RX_parser(finaldir,rxnfile)
     G = arx.RX_builder(finaldir,data)
-   
-    lay = arxviz.generate_visualization()
-    # From the graph G read in the parsing step:
-    arxviz.add_models(G)                          # add XYZ geometry models to the graph
-    arx.vibr_displ_parser(finaldir,G)             # locate ALL normal modes and add them to the graph
-    arxviz.add_vibr_models(G)                     # add geometry models to the graph
+  
+    # prepare paths
     arx.add_paths(G,["MIN1"],["PR1","PR2"])       # add all paths from MIN1 to PR1 and PR2
-    # Set up visualization
-    bk_fig,bk_graph = arxviz.bokeh_network_view(G,positions=posx)
-    layout = arxviz.full_view_layout(bk_fig,bk_graph)
-    # Save to HTML file
-    bokeh.plotting.output_file("Network.html",title="Network visualization for MOL")
+    
+    layout = arxviz.generate_visualization(G,finaldir,title="Network visualization",outfile="Network.html",
+                                        Nvibrations=-1,with_profiles=True,
+                                        layout_function=nx.kamada_kawai_layout)
 ```
 
+*Note*: the **layout_function** argument is equivalent to the `posx = nx.kamada_kawai_layout(G)` call in the previous snippet, and should be a NetworkX layout generation function. Kamada-Kawai is the default, but can become slow for very large networks: `nx.spring_layout()` performs better in these situations.
 
 Alternatively, the more simple commandline script `amk_gen_view.py` allows to generate visualizations directly taking arguments from STDIN. If the corresponding directory is in the *PATH*:
 
@@ -107,7 +103,8 @@ Path location in *amk_rxreader* (either via the commandline interface, with the 
 + For products, a formula *A+B* (no blank spaces) can also be specified, thus locating ALL *PRODX* tags matching the requested formula. Formulas can be found in the *RXNet* files or in the *rxn_all.txt* file.
 + Several sources (or targets) can be specified at once, searching for all possible combinations between sources and targets.
 + When using `amk_gen_view.py`, multiple labels or product formulas should be separated by commas.
-+ When calling the Python function `add_paths(G, [sources], [targets])`, multiple labels or product formulas are given as lists.
++ To handle product formulas in a Python script, the function `arx.node_synonym_search(G,nodelist)`should be used to translate the formulas to the corresponding *PRXX* tags required for path definition (as done in the `amk_gen_view.py` commandline interface)
++ When calling the Python function `add_paths(G, [sources], [targets])`, multiple labels are given as lists.
 
 ### Examples of usage
 The following example shows how to create interactive plots from RXNet.cg file including all paths found at low level for Formic Acid (FA):
