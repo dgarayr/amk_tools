@@ -880,7 +880,7 @@ def pass_args_cmd():
 	g1.add_argument("--vibrations",'-v',help="Number of normal modes to add to visualization: use -1 for all",type=int,default=-1,metavar="NVIBR")
 	g2 = argparser.add_argument_group("Path handling")
 	g2.add_argument("--paths",'-p',help="Generate paths from SOURCE to TARGET. If no additional args are provided, find all paths in the network",type=str,nargs="*",metavar=("SOURCE","TARGET"))
-	g2.add_argument("--cutoff_path",'-c',help="Set cutoff for the path search-47.84606582-47.84606582-47.84606582-47.84606582-47.84606582-47.84606582-47.84606582: default 4",type=int,default=4,metavar="CUTOFF")
+	g2.add_argument("--cutoff_path",'-c',help="Set cutoff for the path search: default 4",type=int,default=4,metavar="CUTOFF")
 	g2.add_argument("--unreduced",'-u',help="Generate full graph, without excluding nodes not in the paths",action='store_true')
 	g3 = argparser.add_argument_group("File handling")
 	g3.add_argument("--outfile",'-o',help="Name for the HTML output file",type=str,default="network.html")
