@@ -310,7 +310,7 @@ def profile_bokeh_plot(G,profile_list,condition=[],width=600,height=600):
 	- bfig. Bokeh figure containing line plots & labels for every profile in profile_list
 	'''
 	# Initialization: instantiate figure, remove X-axis and add palette
-	bfig = bokeh.plotting.Figure(width=width,height=height,tools="pan,wheel_zoom,reset,save",name="PROFILE",
+	bfig = bokeh.plotting.Figure(width=width,height=height,tools="pan,wheel_zoom,box_zoom,reset,save",name="PROFILE",
 				     min_border_left=int(width/10))
 	#bfig.output_backend = "svg"
 	bfig.xaxis.visible = False
