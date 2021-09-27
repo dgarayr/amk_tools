@@ -26,7 +26,7 @@ The resulting graph object contains all the information available on the SQLite 
 This profile generation can take place in two main ways, both accessed through the general `arx.add_paths()` wrapper:
 1. Exhaustive generation of possible pathways along the network, via `arx.theor_cycle_branch_builder(G,start_node)`. Slow for large networks (needs to search along all possible cycles).
 2. Location of specific paths connecting a source node (or list of source nodes) to a target node (or list of target nodes), via `arx.poly_path_finder(G,source_collection,target_collection,cutoff)`. The function automatically generates all required source/target combinations, and does a simple graph traversal of length **cutoff** to find the paths for each combination.
-   + It is also possible to search for the /formula/ of a given product, generating the list of all PROD nodes matching the formula, using `arx.formula_locator(G,formula)`, and then using this list as *source_collection* or *target_collection*. 
+   + It is also possible to search for the /formula/ of a given product, generating the list of all PR nodes matching the formula, using `arx.formula_locator(G,formula)`, and then using this list as *source_collection* or *target_collection*. 
    
 These profiles are saved as a graph property (**pathList**), and can be used for further processing: filtering by energy (`arx.path_filter(G,path_list,energy_threshold)`), subsetting the graph to only keep the nodes in the requested paths (`arx.graph_path_selector(G,path_list)`)... or to generate a basic Matplotlib view through `arx.theor_profile_plotter(G,path_list)`.
 
@@ -112,8 +112,8 @@ Alternatively, the more simple commandline script `amk_gen_view.py` allows to ge
 
 ### Path specification: sources and targets
 Path location in *amk_rxreader* (either via the commandline interface, with the **--paths** argument, or through directly calling **add_paths()** in a Python script) allows a somehow flexible specification of source and target nodes.
-+ *MINX* and *PRODX* labels can be used to specify a single source or target node.
-+ For products, a formula *A+B* (no blank spaces) can also be specified, thus locating ALL *PRODX* tags matching the requested formula. Formulas can be found in the *RXNet* files or in the *rxn_all.txt* file.
++ *MINX* and *PRX* labels can be used to specify a single source or target node.
++ For products, a formula *A+B* (no blank spaces) can also be specified, thus locating ALL *PRX* tags matching the requested formula. Formulas can be found in the *RXNet* files or in the *rxn_all.txt* file.
 + Several sources (or targets) can be specified at once, searching for all possible combinations between sources and targets.
 + When using `amk_gen_view.py`, multiple labels or product formulas should be separated by commas.
 + To handle product formulas in a Python script, the function `arx.node_synonym_search(G,nodelist)`should be used to translate the formulas to the corresponding *PRXX* tags required for path definition (as done in the `amk_gen_view.py` commandline interface)

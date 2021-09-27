@@ -284,11 +284,12 @@ def profile_datasourcer(G,profile_list):
 	- cds_list. List of ColumnDataSource objects defining all required energy profiles'''
 	cds_list = []
 	for ii,prof in enumerate(profile_list):
-		# Filter out barrierless TS 
+		# fix TS names, taking the corresponding nodes as reference
+		tuple_prof = [(prof[jj-1],prof[jj+1]) if "TS" in entry else entry for jj,entry in enumerate(prof)]
+		# Filter out barrierless TS: find indices & then select on tuple-based profile 
 		kept_ndx = [ii for ii,entry in enumerate(prof) if "TSb" not in entry]
 		cleaned_prof = [prof[ii] for ii in kept_ndx]
-		# fix TS names, taking the corresponding nodes as reference
-		working_prof = [(prof[jj-1],prof[jj+1]) if "TS" in entry else entry for jj,entry in enumerate(cleaned_prof)]
+		working_prof = [tuple_prof[ii] for ii in kept_ndx]
 		# Prepare the lines, as in arx.theor_profile_plotter(), duplicating entries
 		xvals = np.arange(0,2*len(working_prof))
 		energies = [arx.simple_prop_fetch(G,entry,"energy") for entry in working_prof]
@@ -355,7 +356,7 @@ def profile_bokeh_plot(G,profile_list,condition=[],width=600,height=600):
 
 	# And add the hover, with custom callback to hide the "formula" field outside products
 	hover_prof = bkm.HoverTool(description="Profile hover",tooltips=[("tag","@lab"),("E","@y{%.2f}"),("formula","@form")],
-							   formatters={"@y":"printf"},renderers=skeleton_lines)
+							   formatters={"@y":"printf"},renderers=skeleton_lines,line_policy="interp")
 	hover_profJS = '''
 	// all renderers are checked at once: when the triggered one is caught (by changes in cb_data.index.line_indices)
 	// access its data_source directly
