@@ -730,7 +730,7 @@ def graph_path_selector(G,path_list):
 	Gsub.graph["pathList"] = path_reformatter(G,path_list)
 	return Gsub
 
-def add_paths(G,source_collection=[],target_collection=[],cutoff=1,skip_int_frags=True):
+def add_paths(G,source_collection=[],target_collection=[],cutoff=4,skip_int_frags=True):
 	'''Finds paths via poly_path_finder(), includes TSs via path_reformatter() and adds them to the input graph. 
 	If no source nor target are provided, 	finds ALL paths via theor_cycle_branch_builder(). 
 	If only source or target are provided, uses theor_cycle_branch_builder()

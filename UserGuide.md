@@ -54,11 +54,19 @@ A basic Python script allowing to generate a complete visualization from scratch
     
     posx = nx.kamada_kawai_layout(G)
     
-    # From the graph G read in the parsing step:
-    arx.add_paths(G,["MIN1"],["PR1","PR2"])       # add all paths from MIN1 to PR1 and PR2
+    # Path addition: use arx.node_synonym_search() to handle product formulas
+    # add all paths from MIN1 to PR1 and PR2
+    limits = arx.node_synonym_search(G,[["MIN1"],["PR1","PR2"]])
+    path_list = arx.add_paths(G,limits[0],limits[1])
+    
+    # Reduce the graph, keeping only the nodes involved in paths
+    G = arx.graph_path_selector(G,path_list)
+    
+    # Prepare models & vibrations
     arxviz.add_models(G)                          # add XYZ geometry models to the graph
     arx.vibr_displ_parser(finaldir,G)             # locate ALL normal modes and add them to the graph
     arxviz.add_vibr_models(G)                     # add geometry models to the graph
+    
     # Set up visualization
     bk_fig,bk_graph = arxviz.bokeh_network_view(G,positions=posx)
     layout = arxviz.full_view_layout(bk_fig,bk_graph)
@@ -77,8 +85,13 @@ The wrapper function `arxviz.generate_visualization()` allows to simplify the pr
     G = arx.RX_builder(finaldir,data)
   
     # prepare paths
-    arx.add_paths(G,["MIN1"],["PR1","PR2"])       # add all paths from MIN1 to PR1 and PR2
+    limits = arx.node_synonym_search(G,[["MIN1"],["PR1","PR2"]])
+    path_list = arx.add_paths(G,limits[0],limits[1])
     
+    # Reduce the graph, keeping only the nodes involved in paths
+    G = arx.graph_path_selector(G,found_paths)
+    
+    # Generate visualization (& handle model addition)
     layout = arxviz.generate_visualization(G,finaldir,title="Network visualization",outfile="Network.html",
                                         Nvibrations=-1,with_profiles=True,
                                         layout_function=nx.kamada_kawai_layout)

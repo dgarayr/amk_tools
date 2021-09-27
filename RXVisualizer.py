@@ -189,9 +189,12 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 
 	Gbok.node_renderer.glyph = bkm.Circle(size=30,fill_color=colormap,fill_alpha=0.5)
 	Gbok.node_renderer.selection_glyph = bkm.Circle(size=30,fill_color=colormap,fill_alpha=0.8,line_width=2)
-	
+	Gbok.node_renderer.hover_glyph = bkm.Circle(size=30,fill_color=colormap,fill_alpha=0.7,line_color=colormap,
+												line_width=2)
+
 	# For edges, only modify selection glyph by now
 	edgesource = Gbok.edge_renderer.data_source
+	Gbok.edge_renderer.hover_glyph = bkm.MultiLine(line_width=2)
 	Gbok.edge_renderer.selection_glyph = bkm.MultiLine(line_width=3,line_color="orange")
 
 	# Add labels according to the positioning object, first for nodes and then for edges
@@ -249,7 +252,7 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 	hover_node = bkm.HoverTool(description="Node hover",renderers=[Gbok.node_renderer],formatters={"@energy":"printf"})
 	hover_node.callback = bkm.CustomJS(args=dict(hover=hover_node,graph=Gbok),code=hoverJS)
 	hover_edge = bkm.HoverTool(description="Edge hover",tooltips=[("tag","@name"),("E","@energy{%.2f}")],
-							   formatters={"@energy":"printf"},renderers=[Gbok.edge_renderer])
+							   formatters={"@energy":"printf"},renderers=[Gbok.edge_renderer],line_policy="interp")
 	bfig.add_tools(hover_node)
 	bfig.add_tools(hover_edge)
 	Gbok.selection_policy = bkm.EdgesAndLinkedNodes()
