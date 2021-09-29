@@ -342,9 +342,9 @@ def profile_bokeh_plot(G,profile_list,condition=[],width=600,height=600):
 		cds_lab = bkm.ColumnDataSource({k:cdspath.data[k][::2] for k in ["x","y","lab"]})
 		cds_lab.data["elab"] = ["%.1f" % float(e) for e in cds_lab.data["y"]]
 		cds_lab.data["x"] = [(float(item) + 0.5) for item in cds_lab.data["x"]]
-		rect = bkm.Rect(x="x",y="y",fill_color=palette[cndx],fill_alpha=0.9,width=1,height=2,line_width=0,name="RECTANGLE")
+		rect = bkm.Rect(x="x",y="y",fill_color=palette[cndx],fill_alpha=0.9,width=1,height=1.8,line_width=0,name="RECTANGLE")
 		rx_rect = bfig.add_glyph(cds_lab,rect)
-		rx_label = bkm.LabelSet(x="x",y="y",text="lab",source=cds_lab,x_offset=-1,y_offset=1,name="THELABELS")
+		rx_label = bkm.LabelSet(x="x",y="y",text="lab",source=cds_lab,x_offset=-1,y_offset=2,name="THELABELS")
 		bfig.add_layout(rx_label)
 		energy_label = bkm.LabelSet(x="x",y="y",text="elab",source=cds_lab,y_offset=-20,name="ENERGYLABELS")
 		bfig.add_layout(energy_label)

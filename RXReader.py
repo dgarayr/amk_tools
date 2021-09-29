@@ -329,6 +329,11 @@ def RX_builder(finaldir,data,orig_selec_mode=False,add_zpe=True):
 		if ((side1_ii == side2_ii) and (sel_m1 == sel_m2)):
 			continue
 
+		# Filter entries where the absolute energy is zero, corresponding to failed calculations
+		failed_energy = [(np.abs(e) < 1e-6) for e in [e_m1,e_m2]]
+		if (any(failed_energy)):
+			continue
+
 		# Compute relative energies and generate consistent labels: unit handling is done at query_all()
 		relvals = [e - e_ref for e in [e_ts,e_m1,e_m2]]
 		labels = [name + str(ii) for name,ii in zip(tag,ndx)]
