@@ -11,6 +11,8 @@ import matplotlib.collections as collections
 import matplotlib.text
 import itertools
 import networkx as nx
+import os
+import re
 from collections import defaultdict
 
 # Constant definitions (from scipy.constants, redefined to avoid additional dependencies)
@@ -50,6 +52,21 @@ def molden_vibration_parser(moldenfile):
 	- freqs. List of floats containing frequencies parsed from the file.
 	- coords. List of lists containing XYZ coordinates.
 	- displacements. List of lists of lists containing XYZ coordinates for each atomic displacement.'''
+	# Check whether default filename exists, either try to check if alternative FILEprog_XXXX.molden exists
+	file_flag = os.path.exists(moldenfile)
+	if (not file_flag):
+		code = re.sub("\D+","",moldenfile)
+		tag = re.sub("[0-9].*","",moldenfile)
+		g09_name = tag + "g09_" + code + ".molden"
+		mopac_name = tag + "mop_" + code + ".molden"
+		# Check whether these exist: _mop is only present as fallback, but will not be used if _g09 is present
+		present_files = [fname for fname in [g09_name,mopac_name] if os.path.exists(fname)]
+		if (present_files):
+			moldenfile = present_files[0]
+		else:
+			print("File %s not found!" % moldenfile)
+			return None,None,None
+		
 	with open(moldenfile,"r") as fmold:
 		dump = fmold.read()
 	sel_list = dump.split("]")[2:]
