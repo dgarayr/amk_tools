@@ -10,6 +10,20 @@ from jsmol_bokeh_extension import JSMol
 import networkx as nx
 import numpy as np
 
+### Styling control via dictionary: modify it directly to control font sizes, line widths...
+style_information = {
+	"networkTitleFont":"1.5vh",
+	"networkLabelFont":"1.5vh",
+	"profileLabelFont":"1.5vh",
+	"profileAxisTitleFont":"1.5vh",
+	"profileAxisTickFont":"1.2vh",
+	"profileLabelFont":"1.4vh",
+	"profileLabelXOffset":-1,
+	"profileLabelYOffset":2,
+	"profileELabelYOffset":-20,
+	"profileBoxHeight":2
+}
+
 # Basic management functions
 
 def generate_inline_mol(xyzstring):
@@ -171,7 +185,7 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 	bfig.axis.visible = False
 	bfig.xgrid.grid_line_color = None
 	bfig.ygrid.grid_line_color = None
-	bfig.title.text_font_size = "1.5vh"
+	bfig.title.text_font_size = style_information["networkTitleFont"]
 
 	# Check if positions were passed, and create inside if necessary
 	if (not positions):
@@ -205,7 +219,7 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 	posnode = bkm.ColumnDataSource(posnode_dict)
 	labels_node = bkm.LabelSet(x='xn', y='yn', text='nnames', text_font_style='bold',
 				   x_offset=0, y_offset=5, source=posnode, render_mode='canvas',
-				   text_font_size='1.5vh')
+				   text_font_size=style_information["networkLabelFont"])
 	bfig.add_layout(labels_node)
 
 	# TS labels: fetch central position and name for every edge (skipping barrierless ones)
@@ -221,7 +235,7 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 	posedge = bkm.ColumnDataSource(posedge_dict)
 	labels_edge = bkm.LabelSet(x='xe', y='ye', text='enames', text_font_style='bold',text_color='red',
 				   x_offset=0, y_offset=0, source=posedge, render_mode='canvas',
-				   text_font_size='1.5vh')
+							   text_font_size=style_information["networkLabelFont"])
 	bfig.add_layout(labels_edge)
 
 	# Adding tools: hover & tap. To be able to see info about both nodes and edges, we must change the inspection policy
@@ -320,9 +334,9 @@ def profile_bokeh_plot(G,profile_list,condition=[],width=600,height=600):
 	bfig.xaxis.visible = False
 	bfig.yaxis.axis_label = "E (kcal/mol)"
 	bfig.yaxis.axis_label_text_font = "Arial"
-	bfig.yaxis.axis_label_text_font_size = "1.5vh"
+	bfig.yaxis.axis_label_text_font_size = style_information["profileAxisTitleFont"]
 	bfig.yaxis.axis_label_text_font_style = "bold"
-	bfig.yaxis.major_label_text_font_size = "1.2vh"
+	bfig.yaxis.major_label_text_font_size = style_information["profileAxisTickFont"]
 	palette = bokeh.palettes.d3['Category10'][10]
 
 	# Generate the list of ColumnDataSources
@@ -342,11 +356,13 @@ def profile_bokeh_plot(G,profile_list,condition=[],width=600,height=600):
 		cds_lab = bkm.ColumnDataSource({k:cdspath.data[k][::2] for k in ["x","y","lab"]})
 		cds_lab.data["elab"] = ["%.1f" % float(e) for e in cds_lab.data["y"]]
 		cds_lab.data["x"] = [(float(item) + 0.5) for item in cds_lab.data["x"]]
-		rect = bkm.Rect(x="x",y="y",fill_color=palette[cndx],fill_alpha=0.9,width=1,height=1.5,line_width=0,name="RECTANGLE")
+		rect = bkm.Rect(x="x",y="y",fill_color=palette[cndx],fill_alpha=0.9,width=1,height=style_information["profileBoxHeight"],line_width=0,name="RECTANGLE")
 		rx_rect = bfig.add_glyph(cds_lab,rect)
-		rx_label = bkm.LabelSet(x="x",y="y",text="lab",source=cds_lab,x_offset=-1,y_offset=2,name="THELABELS")
+		rx_label = bkm.LabelSet(x="x",y="y",text="lab",source=cds_lab,x_offset=style_information["profileLabelXOffset"],y_offset=style_information["profileLabelYOffset"],
+								name="THELABELS",text_font_size=style_information["profileLabelFont"])
 		bfig.add_layout(rx_label)
-		energy_label = bkm.LabelSet(x="x",y="y",text="elab",source=cds_lab,y_offset=-20,name="ENERGYLABELS")
+		energy_label = bkm.LabelSet(x="x",y="y",text="elab",source=cds_lab,y_offset=style_information["profileELabelYOffset"],name="ENERGYLABELS",
+									text_font_size=style_information["profileLabelFont"])
 		bfig.add_layout(energy_label)
 		### Add filtering: hide when filter condition is not fulfilled
 		rx_line.visible = condition[ii]
@@ -889,6 +905,7 @@ def pass_args_cmd():
 	g3.add_argument("--title",'-t',help="Title for the HTML visualization",type=str,default="Reaction network visualization")
 	g4 = argparser.add_argument_group("Aspect handling")
 	g4.add_argument("--resolution","-r",help="Size for the HTML visualization, of the form WIDTH,HEIGHT in pixels",type=str,default="1400,800")
+	g4.add_argument("--fasterlayout","-f",help="Use the faster nx.spring_layout as default",action='store_true')
 	try:
 		args = argparser.parse_args()
 	except:
@@ -939,9 +956,13 @@ def gen_view_cmd(args):
 		Gwork = G
 	# Generate the visualization, parsing the size
 	width_value,height_value = [int(item) for item in args.resolution.split(",")]
+	if (args.fasterlayout):
+		lay_function = nx.spring_layout
+	else:
+		lay_function = nx.kamada_kawai_layout
 	view = generate_visualization(Gwork,finaldir=args.finaldir,title=args.title,outfile=args.outfile,
 								  Nvibrations=args.vibrations,with_profiles=paths_passed,size=(width_value,height_value),
-								  geo_molden_update=args.geomolden)
+								  layout_function=lay_function,geo_molden_update=args.geomolden)
 
 	return Gwork,view
 
