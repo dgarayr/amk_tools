@@ -9,6 +9,8 @@ import RXReader as arx
 from jsmol_bokeh_extension import JSMol
 import networkx as nx
 import numpy as np
+import copy
+
 
 ### Styling control via dictionary: modify it directly to control font sizes, line widths...
 style_information = {
@@ -21,7 +23,8 @@ style_information = {
 	"profileLabelXOffset":-1,
 	"profileLabelYOffset":2,
 	"profileELabelYOffset":-20,
-	"profileBoxHeight":2
+	"profileBoxHeight":2,
+	"profileLineWidth":1
 }
 
 # Basic management functions
@@ -305,7 +308,7 @@ def profile_datasourcer(G,profile_list):
 		cleaned_prof = [prof[ii] for ii in kept_ndx]
 		working_prof = [tuple_prof[ii] for ii in kept_ndx]
 		# Prepare the lines, as in arx.theor_profile_plotter(), duplicating entries
-		xvals = np.arange(0,2*len(working_prof))
+		xvals = np.arange(0,2*len(working_prof),dtype="float64")
 		energies = [arx.simple_prop_fetch(G,entry,"energy") for entry in working_prof]
 		# formulas shall only be fetched for PRODUCTS
 		formulas = [arx.simple_prop_fetch(G,entry,"formula") if "PR" in entry else None for entry in working_prof]
@@ -350,18 +353,22 @@ def profile_bokeh_plot(G,profile_list,condition=[],width=600,height=600):
 	for ii,cdspath in enumerate(cds_paths):
 		Nentries = len(cdspath.data["lab"])
 		cndx = (ii % 10)
-		rx_line = bfig.line(x="x",y="y",color=palette[cndx],source=cdspath)
+		rx_line = bfig.line(x="x",y="y",color=palette[cndx],source=cdspath,line_width=style_information["profileLineWidth"])
 		skeleton_lines.append(rx_line)
 		# Prepare labels, slicing the original CDS to avoid repetitions
 		cds_lab = bkm.ColumnDataSource({k:cdspath.data[k][::2] for k in ["x","y","lab"]})
-		cds_lab.data["elab"] = ["%.1f" % float(e) for e in cds_lab.data["y"]]
-		cds_lab.data["x"] = [(float(item) + 0.5) for item in cds_lab.data["x"]]
+		cds_lab.data["elab"] = np.array(["%.1f" % float(e) for e in cds_lab.data["y"]])
+		cds_lab.data["x"] = np.array([(float(item) + 0.5) for item in cds_lab.data["x"]])
 		rect = bkm.Rect(x="x",y="y",fill_color=palette[cndx],fill_alpha=0.9,width=1,height=style_information["profileBoxHeight"],line_width=0,name="RECTANGLE")
 		rx_rect = bfig.add_glyph(cds_lab,rect)
-		rx_label = bkm.LabelSet(x="x",y="y",text="lab",source=cds_lab,x_offset=style_information["profileLabelXOffset"],y_offset=style_information["profileLabelYOffset"],
+
+		# Do a copy for the labels to avoid problems with mutability
+		cds_lab_working = bkm.ColumnDataSource(copy.deepcopy(cds_lab.data))
+		rx_label = bkm.LabelSet(x="x",y="y",text="lab",source=cds_lab_working,x_offset=style_information["profileLabelXOffset"],y_offset=style_information["profileLabelYOffset"],
 								name="THELABELS",text_font_size=style_information["profileLabelFont"])
 		bfig.add_layout(rx_label)
-		energy_label = bkm.LabelSet(x="x",y="y",text="elab",source=cds_lab,y_offset=style_information["profileELabelYOffset"],name="ENERGYLABELS",
+		energy_label = bkm.LabelSet(x="x",y="y",text="elab",source=cds_lab_working,x_offset=style_information["profileLabelXOffset"],
+									y_offset=style_information["profileELabelYOffset"],name="ENERGYLABELS",
 									text_font_size=style_information["profileLabelFont"])
 		bfig.add_layout(energy_label)
 		### Add filtering: hide when filter condition is not fulfilled

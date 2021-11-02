@@ -747,7 +747,10 @@ def path_filter(G,path_list,threshold):
 	- valid_paths. List of lists, containing paths that fulfill the input condition'''
 	valid_paths = []
 	for path in path_list:
-		edges = [(path[ii],path[ii+1]) for ii in range(len(path) - 1)]
+		# If path is passed with TS labels, remove them
+		path_working = [item for item in path if "TS" not in item]
+		edges = [(path_working[ii],path_working[ii+1]) for ii in range(len(path_working) - 1)]
+		print(edges)
 		edge_energies = np.array([G.edges[ed]["energy"] for ed in edges])
 		discard_path = np.any(edge_energies >= threshold)
 		if (not discard_path):
