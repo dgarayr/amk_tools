@@ -363,11 +363,12 @@ def profile_bokeh_plot(G,profile_list,condition=[],width=600,height=600):
 		rx_rect = bfig.add_glyph(cds_lab,rect)
 
 		# Do a copy for the labels to avoid problems with mutability
-		cds_lab_working = bkm.ColumnDataSource(copy.deepcopy(cds_lab.data))
-		rx_label = bkm.LabelSet(x="x",y="y",text="lab",source=cds_lab_working,x_offset=style_information["profileLabelXOffset"],y_offset=style_information["profileLabelYOffset"],
+		cds_lab_textlab = bkm.ColumnDataSource(copy.deepcopy(cds_lab.data))
+		rx_label = bkm.LabelSet(x="x",y="y",text="lab",source=cds_lab_textlab,x_offset=style_information["profileLabelXOffset"],y_offset=style_information["profileLabelYOffset"],
 								name="THELABELS",text_font_size=style_information["profileLabelFont"])
 		bfig.add_layout(rx_label)
-		energy_label = bkm.LabelSet(x="x",y="y",text="elab",source=cds_lab_working,x_offset=style_information["profileLabelXOffset"],
+		cds_lab_elab = bkm.ColumnDataSource(copy.deepcopy(cds_lab.data))
+		energy_label = bkm.LabelSet(x="x",y="y",text="elab",source=cds_lab_elab,x_offset=style_information["profileLabelXOffset"],
 									y_offset=style_information["profileELabelYOffset"],name="ENERGYLABELS",
 									text_font_size=style_information["profileLabelFont"])
 		bfig.add_layout(energy_label)
