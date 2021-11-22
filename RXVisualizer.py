@@ -824,6 +824,7 @@ def full_view_layout(bokeh_figure,bokeh_graph,G=None,local_jsmol=False,local_jsm
 		layout.children[1][0].children.append(control_row)
 	return layout
 
+
 def generate_visualization(G,finaldir,title,outfile,Nvibrations=-1,with_profiles=False,size=(1400,800),
 						   layout_function=nx.kamada_kawai_layout,geo_molden_update=True):
 	'''Wrapper function to generate HTML visualizations for a given network
@@ -876,7 +877,6 @@ def generate_visualization(G,finaldir,title,outfile,Nvibrations=-1,with_profiles
 	if (Nvibrations != 0):
 		arx.vibr_displ_parser(finaldir,G,Nvibrations,geo_molden_update)
 		add_vibr_models(G)
-	
 	# Bokeh-powered visualization via RXVisualizer
 	bk_fig,bk_graph = bokeh_network_view(G,positions=posx,graph_title=title,width=w1,height=h)
 	if (with_profiles):
@@ -906,6 +906,7 @@ def pass_args_cmd():
 	g2 = argparser.add_argument_group("Path handling")
 	g2.add_argument("--paths",'-p',help="Generate paths from SOURCE to TARGET. If no additional args are provided, find all paths in the network",type=str,nargs="*",metavar=("SOURCE","TARGET"))
 	g2.add_argument("--cutoff_path",'-c',help="Set cutoff for the path search: default 4",type=int,default=4,metavar="CUTOFF")
+	g2.add_argument("--efilter","-e",help="Set energy threshold for path selection, in kcal/mol: by default no filtering is done",type=float,default=None)
 	g2.add_argument("--unreduced",'-u',help="Generate full graph, without excluding nodes not in the paths",action='store_true')
 	g2.add_argument("--geomolden",'-ng',help="Update geometries from MOLDEN files",action='store_true')
 	g3 = argparser.add_argument_group("File handling")
@@ -956,6 +957,9 @@ def gen_view_cmd(args):
 			limits = [[],[]]
 		#args.title = " to ".join([source,target])
 		paths = arx.add_paths(G,limits[0],limits[1],cutoff=args.cutoff_path)
+		# energy filtering?
+		if (args.efilter):
+			paths[:] = arx.path_filter(G,paths,args.efilter)
 		if (not args.unreduced):
 			Gwork = arx.graph_path_selector(G,paths)
 		else:
