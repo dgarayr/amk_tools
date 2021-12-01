@@ -130,7 +130,8 @@ def query_all(dbcursor,filterstruc,tablename,add_zpe=True,e_units="kcal/mol",mul
 	a single element will be returned, corresponding to the first match of the query.
 	Output:
 	- output. Dictionary containing queried elements (as lists if multi_query == True). Keys:
-	  + energy. Float, queried energy. 
+	  + energy. Float, queried energy.
+	  + zpe. Float, queried zero-point vibrational energy
 	  + geometry. String containing newline-separated blocks for Cartesian coordinates of a molecule.
 	  + frequencies. Strings containing newline-separated blocks for all frequency values of a molecule
 	  + fnames. String, name for the current molecule.
@@ -149,15 +150,17 @@ def query_all(dbcursor,filterstruc,tablename,add_zpe=True,e_units="kcal/mol",mul
 		zpe = np.array([match[1] for match in matches])
 		energies = list(e_elec + zpe)
 	else:
+		# set ZPE as null, so it can be returned in the output safely
+		zpe = [0.0 for item in matches]
 		energies = list(e_elec)
 
 	geometry = [match[2] for match in matches]
 	frequencies = [match[3] for match in matches]
 	names = [match[4] for match in matches]
 	if (multi_query):
-		output = {"energy":energies,"geometry":geometry,"frequencies":frequencies,"fname":names}
+		output = {"energy":energies,"geometry":geometry,"frequencies":frequencies,"fname":names,"zpe":zpe}
 	else:
-		output = {"energy":energies[0],"geometry":geometry[0],"frequencies":frequencies[0],"fname":names[0]}
+		output = {"energy":energies[0],"geometry":geometry[0],"frequencies":frequencies[0],"fname":names[0],"zpe":zpe[0]}
 	# For products, the formula field shall be included too
 	if (tablename == "prod" or tablename == "pr"):
 		formulae = [match[5] for match in matches]
@@ -306,7 +309,10 @@ def RX_builder(finaldir,data,orig_selec_mode=False,add_zpe=True):
 	smin = check_mininfo(finaldir)
 	if (not smin):
 		smin = min([entry[1] for entry in data[1]])
-	e_ref = query_all(dbmin,"WHERE id==%s" % smin,"min",add_zpe=add_zpe,e_units=e_units)["energy"]
+
+	data_ref = query_all(dbmin,"WHERE id==%s" % smin,"min",add_zpe=add_zpe,e_units=e_units)
+	e_ref = data_ref["energy"]
+	zpe_ref = data_ref["zpe"]
 
 	# save in output dict
 	network_info.update({"ref_struc":"MIN%d" % smin, "ref_energy":e_ref})
@@ -325,6 +331,7 @@ def RX_builder(finaldir,data,orig_selec_mode=False,add_zpe=True):
 		if (qts):
 			data_ts = query_all(dbdict["ts"],qts,"ts",add_zpe=add_zpe,e_units=e_units)
 			e_ts = data_ts["energy"]
+			zpe_ts = data_ts["zpe"]
 			barrierless = False
 		else:
 			# Check barrierless transition states so we do not assign anything to this edge apart from the name
@@ -340,12 +347,16 @@ def RX_builder(finaldir,data,orig_selec_mode=False,add_zpe=True):
 
 		data_m1 = query_all(dbdict[sel_m1],qm1,sel_m1,add_zpe=add_zpe,e_units=e_units)
 		e_m1 = data_m1["energy"]
+		zpe_m1 = data_m1["zpe"]
 		data_m2 = query_all(dbdict[sel_m2],qm2,sel_m2,add_zpe=add_zpe,e_units=e_units)
 		e_m2 = data_m2["energy"]
+		zpe_m2 = data_m2["zpe"]
 
-		# assign m2 energy to barrierless TSs
+		# assign m2 energy to barrierless TSs & select the corresponding zero-point energy
 		if (barrierless):
 			e_ts = max(e_m1,e_m2)
+			sel_index = [e_m1,e_m2].index(e_ts)
+			zpe_ts = [zpe_m1,zpe_m2][sel_index]
 			data_ts["energy"] = max(e_m1,e_m2)
 			data_ts["frequencies"] = None
 			data_ts["geometry"] = None
@@ -361,9 +372,20 @@ def RX_builder(finaldir,data,orig_selec_mode=False,add_zpe=True):
 			continue
 
 		# Compute relative energies and generate consistent labels: unit handling is done at query_all()
-		relvals = [e - e_ref for e in [e_ts,e_m1,e_m2]]
+		# Also check for entries whose ZPE is zero (structures for which no freqs have been computed, such as fragmented products in LL calcs) and remove
+		# the ZPE corr from the reference (by ADDING zpe_ref term)
 		labels = [name + str(ii) for name,ii in zip(tag,ndx)]
-
+		e_list = [e_ts,e_m1,e_m2]
+		zpe_list = [zpe_ts,zpe_m1,zpe_m2]
+		relvals = []
+		for e,zpe in zip(e_list,zpe_list):
+			# Handle the correction for null ZPE values when ZPE is being requested
+			if (np.abs(zpe) < 1e-6 and add_zpe):
+				rel_e = e - e_ref + zpe_ref
+			else:
+				rel_e = e - e_ref
+			relvals.append(rel_e)
+				
 		# Construct energy dictionary and a full edge constructor with connections, name and energy parameters
 		nn1,nn2 = labels[1:3]
 		
