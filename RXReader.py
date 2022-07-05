@@ -1071,3 +1071,125 @@ def theor_profile_plotter(G,profile_list,figsize=(10,10),cmap="tab10"):
 			evalue = "%.2f" % loc[1]
 			ax.annotate(evalue,[loc[0],loc[1]-yshift],horizontalalignment='center',verticalalignment='top').draggable()
 	return fig,ax   
+
+### Graph analysis tools, originally on AutoMeKin and ported to amk-tools
+def get_avg_k(graph):
+	'''Compute the average node degree <k> of a NetworkX.Graph, by computing the sum of
+	the degrees of all nodes and averaging it by the no. of nodes
+	Input:
+	- graph. NetworkX.Graph object
+	Output:
+	- k. Float, average node degree.'''
+	deg_info = dict(graph.degree())
+	Nn = graph.number_of_nodes()
+	k = sum(list(deg_info.values()))/Nn
+	return k
+
+def get_avg_Lr(glist):
+	'''
+	Compute average shortest path length for a list of Erdos-Renyi graphs following Eq. 19
+	from https://arxiv.org/pdf/cond-mat/0407098.pdf, using the Euler constant gamma = 0.5772
+	(Lr)i = 1/2 + (ln(Nn) - gamma)/ln(<k>) -> summed across the list of Ng graphs
+	Input:
+	- glist. List of Erdos-Renyi random graphs.
+	Output:
+	- Lr. Float, average shortest path length for the collection of graphs
+	'''
+	gamma = 0.577216
+	Ng = len(glist)
+	Nn = glist[0].number_of_nodes()
+	kvals = [get_avg_k(gx) for gx in glist]
+	# The expresison is problematic if <k> <= 1, as it depends on a logarithm, so these values are
+	# filtered out here to avoid problems 
+	sum_term = sum([1/np.log(k) for k in kvals if (k-1.0>1e-4)])
+	Lr = 0.5 + (np.log(Nn) - gamma)/Ng * sum_term
+	return Lr
+
+def spl_random(glist):
+	'''Compute average clustering coefficient and transitivity for a list of Erdos-Renyi graphs
+	using NetworkX implementations
+	Input:
+	- glist. List of Erdos-Renyi random graphs.
+	Output:
+	- avg_c. Average clustering coefficient of the Ng graphs
+	- avg_t. Average transitivity of the Ng graphs'''
+	Ngraphs = len(glist)
+	avg_c = 0
+	avg_t = 0
+	for ii in range(Ngraphs):
+		avg_c += nx.average_clustering(glist[ii])
+		avg_t += nx.transitivity(glist[ii])
+	avg_c = avg_c / Ngraphs
+	avg_t = avg_t / Ngraphs
+	return avg_c,avg_t
+
+def er_graph_generation(Gx,Ng=1000):
+	'''Generation of Ng random Erdos-Renyi graphs, with the same number of nodes as the
+	parent graph and an edge probability p computed from the maximum possible number of edges
+	(Ne)max = Nn(Nn-1)/2 and p = Ne/(Ne)max
+	Input:
+	- Gx. Parent NetworkX.Graph used as template for the equivalent ER graphs
+	- Ng. Integer, number of graphs to be generated
+	Output:
+	- glist. List of Erdos-Renyi random graphs'''
+	Nn = Gx.number_of_nodes()
+	Ne = Gx.number_of_edges()
+	Nem = Nn*(Nn-1)/2
+	p = Ne/Nem
+	glist = [nx.erdos_renyi_graph(Nn,p) for ii in range(Ng)]
+	return glist
+
+def stat_generator(Gx,Ng=1000,gen_file=True):
+	'''Determination of graph statistics (no. of nodes and edges, average shortest path length, clustering
+	coefficient, transitivity, density of edges and degree assortativity) for a given reaction network
+	and comparison with the parameters obtained for a set of Ng Erdos-Renyi graphs of equivalent size
+	Input:
+	- Gx. Parent NetworkX.Graph to compute statistics for
+	- Ng. Integer, number of random graphs to be generated
+	- gen_file. Boolean, if True create a rxn_stats.txt file with requested information
+	Output:
+	- par_dict. Dict mapping variable names to integers and floats containing computed statistics
+	'''
+	# Basic parameters
+	Nn = Gx.number_of_nodes()
+	Ne = Gx.number_of_edges()
+	Nem = Nn*(Nn-1)/2
+	p = Ne/Nem
+
+	# Calculations for the current network
+	avg_Lr = nx.average_shortest_path_length(Gx)
+	avg_cc = nx.average_clustering(Gx)
+	avg_transit = nx.transitivity(Gx)
+	assortativity = nx.degree_assortativity_coefficient(Gx)
+
+	# Random graph generation and calculations
+	glist = er_graph_generation(Gx,Ng)
+	avg_Lr_rand = get_avg_Lr(glist)
+	avg_cc_rand,avg_transit_rand = spl_random(glist)
+
+	par_dict = {"Nn":Nn,"Ne":Ne,"avg_Lr":avg_Lr,"avg_Lr_rand":avg_Lr_rand,
+				"transitivity":avg_transit,"transitivity_rand":avg_transit_rand,
+				"avg_cluster":avg_cc,"avg_cluster_rand":avg_cc_rand,
+				"assortativity":assortativity,"edge_density":p}
+
+	if (gen_file):
+		text_block = '#################################################### \n'
+		text_block += '#                                                  # \n'
+		text_block += '#        Properties of the reaction network        # \n'
+		text_block += '#                                                  # \n'
+		text_block += '#################################################### \n \n '
+		text_block += "  Number of nodes = {0:>7} \n".format(Nn)
+		text_block += "   Number of edges = {0:>7} \n".format(Ne)
+		text_block += "   Average shortest path length of the current network             = {0:>7} \n".format(avg_Lr)
+		text_block += "   Average shortest path length of the equivalent random network   = {0:>7} \n".format(avg_Lr_rand)
+		text_block += "   Average clustering coefficient of the current network           = {0:>7} \n".format(avg_cc)
+		text_block += "   Average clustering coefficient of the equivalent random network = {0:>7} \n".format(avg_cc_rand)
+		text_block += "   Transitivity of the current network                             = {0:>7} \n".format(avg_transit)
+		text_block += "   Transitivity of the equivalent random network                   = {0:>7} \n".format(avg_transit_rand)
+		text_block += "   Density of edges (edges/possible_edges)                         = {0:>7} \n".format(p)
+		text_block += "   Degree assortativity coefficient                                = {0:>7} \n".format(assortativity)
+
+		with open("rxn_stats.txt","w") as fw:
+			fw.write(text_block)
+	
+	return par_dict
