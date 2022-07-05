@@ -648,10 +648,12 @@ def product_collapser(G):
 
 	# Regenerate formula mapping to avoid problems
 	formula_map = formula_dict_constructor(Gwork)
-
 	collapsed_dict = {}
 	for formula,prod_list in formula_map.items():
 		if (len(prod_list) == 1):
+			label = "PR_" + formula
+			nx.relabel_nodes(Gwork,mapping={prod_list[0]:label},copy=False)
+			collapsed_dict.update({prod_list[0]:label})
 			continue
 		# Get energies and sort the list to select the lowest-energy product complex as parent
 		prod_energies = [G.nodes[prod]["energy"] for prod in prod_list]
@@ -664,7 +666,7 @@ def product_collapser(G):
 		# prepare the dict mapping the nodes to the new label
 		collapsed_dict.update({prod:label for prod in prod_list_sort})
 	# If paths are present, modify them accordingly
-	if (Gwork.graph["pathList"]):
+	if (Gwork.graph.get("pathList",None)):
 		collapsed_paths = []
 		for path in Gwork.graph["pathList"]:
 			nw_path = [collapsed_dict[item] if item in collapsed_dict.keys() else item for item in path]
