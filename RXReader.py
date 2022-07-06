@@ -1139,7 +1139,7 @@ def er_graph_generation(Gx,Ng=1000):
 	glist = [nx.erdos_renyi_graph(Nn,p) for ii in range(Ng)]
 	return glist
 
-def stat_generator(Gx,Ng=1000,gen_file=True):
+def stat_generator(Gx,Ng=1000,gen_file=True,fn_name="rxn_stats.txt"):
 	'''Determination of graph statistics (no. of nodes and edges, average shortest path length, clustering
 	coefficient, transitivity, density of edges and degree assortativity) for a given reaction network
 	and comparison with the parameters obtained for a set of Ng Erdos-Renyi graphs of equivalent size
@@ -1147,6 +1147,7 @@ def stat_generator(Gx,Ng=1000,gen_file=True):
 	- Gx. Parent NetworkX.Graph to compute statistics for
 	- Ng. Integer, number of random graphs to be generated
 	- gen_file. Boolean, if True create a rxn_stats.txt file with requested information
+	- fn_name. String, name of the file to dump statistics to.
 	Output:
 	- par_dict. Dict mapping variable names to integers and floats containing computed statistics
 	'''
@@ -1155,6 +1156,8 @@ def stat_generator(Gx,Ng=1000,gen_file=True):
 	Ne = Gx.number_of_edges()
 	Nem = Nn*(Nn-1)/2
 	p = Ne/Nem
+
+	print("Computing network statistics")
 
 	# Calculations for the current network
 	avg_Lr = nx.average_shortest_path_length(Gx)
@@ -1172,7 +1175,8 @@ def stat_generator(Gx,Ng=1000,gen_file=True):
 				"avg_cluster":avg_cc,"avg_cluster_rand":avg_cc_rand,
 				"assortativity":assortativity,"edge_density":p}
 
-	if (gen_file):
+	
+	if (gen_file and fn_name):
 		text_block = '#################################################### \n'
 		text_block += '#                                                  # \n'
 		text_block += '#        Properties of the reaction network        # \n'
@@ -1189,7 +1193,7 @@ def stat_generator(Gx,Ng=1000,gen_file=True):
 		text_block += "   Density of edges (edges/possible_edges)                         = {0:>7} \n".format(p)
 		text_block += "   Degree assortativity coefficient                                = {0:>7} \n".format(assortativity)
 
-		with open("rxn_stats.txt","w") as fw:
+		with open(fn_name,"w") as fw:
 			fw.write(text_block)
 	
 	return par_dict

@@ -12,7 +12,8 @@ argparser.add_argument("--skip_barrierless",'-sb',help="Exclude barrierless rout
 					   action='store_true')
 argparser.add_argument("--Ngraphs",'-Ng',help="Number of random graphs to consider for statistics",
 					   type=int,default=1000)
-
+argparser.add_argument("--outfilename","-o",help="Name of the output file for statistics",
+					   type=str,default="rxn_stats.txt")
 try:
 	args = argparser.parse_args()
 except:
@@ -31,4 +32,4 @@ if (not args.skip_barrierless and barr_path.is_file()):
 	data = joined_data
 Gx = arx.RX_builder(fol,data)
 
-arx.stat_generator(Gx,Ng=args.Ngraphs,gen_file=True)
+arx.stat_generator(Gx,Ng=args.Ngraphs,gen_file=True,fn_name=args.outfilename)
