@@ -923,6 +923,7 @@ def pass_args_cmd(pass_args=[]):
 	g1 = argparser.add_argument_group("RXN parsing")
 	g1.add_argument("--barrierless",'-b',help="Include barrierless routes from RXNet.barrless",action='store_true')
 	g1.add_argument("--vibrations",'-v',help="Number of normal modes to add to visualization: use -1 for all",type=int,default=-1,metavar="NVIBR")
+	g1.add_argument("--ref_state",'-rs',help="Reference state for energies",type=str,default=None)
 	g2 = argparser.add_argument_group("Path handling")
 	g2.add_argument("--paths",'-p',help="Generate paths from SOURCE to TARGET. If no additional args are provided, find all paths in the network",type=str,nargs="*",metavar=("SOURCE","TARGET"))
 	g2.add_argument("--cutoff_path",'-c',help="Set cutoff for the path search: default 4",type=int,default=4,metavar="CUTOFF")
@@ -961,6 +962,11 @@ def gen_view_cmd(args):
 		joined_data = [data[ii]+data_barrless[ii] for ii in range(len(data))]
 		data = joined_data
 	G = arx.RX_builder(finaldir=args.finaldir,data=data)
+
+	# Manage reference state changes
+	if (args.ref_state):
+		arx.switch_ref_state(G,args.ref_state)
+	
 	# Path handling: several situations are possible: i) SOURCE and TARGET, ii) only SOURCE, iii) not SOURCE nor TARGET, iv) --paths not passed
 	# For i), ii) and iii), paths shall be added, and args.paths will be a LIST
 	# Also, several sources or targets can be passed, comma-separated
@@ -980,9 +986,11 @@ def gen_view_cmd(args):
 			limits = [[],[]]
 		#args.title = " to ".join([source,target])
 		paths = arx.add_paths(G,limits[0],limits[1],cutoff=args.cutoff_path)
-		# energy filtering?
+		# Additional filters and modifications
+
 		if (args.efilter):
 			paths[:] = arx.path_filter(G,paths,args.efilter)
+		
 		if (not args.unreduced):
 			Gwork = arx.graph_path_selector(G,paths)
 		else:
