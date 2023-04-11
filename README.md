@@ -30,7 +30,7 @@ If more control is desired, the user should use a custom Python script.
 
 ## Dependencies
 + NetworkX 
-+ Bokeh (>= 2.3.2)
++ Bokeh 2.x (>= 2.3.2, < 3.0.0)
 + jsmol_bokeh_extension
 + NodeJS (>= 14.0.0)
 + matplotlib
@@ -43,3 +43,5 @@ pip install -e .
 ```
 
 to install the package in *editable* mode: thus, all changes in the **py** files of the modules RXReader and RXVisualizer will be directly applied to the calculations where the modules are used.
+
+Bokeh 3.x is not currently supported due to changes in the API.
