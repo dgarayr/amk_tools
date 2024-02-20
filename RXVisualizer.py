@@ -146,9 +146,9 @@ def generate_applet(width=600,height=600,alt_route=False,jsmol_resources={}):
 		j2sPath = jsmol_resources["j2sPath"]
 		js_url = jsmol_resources["js_url"]
 	else:
-		serverURL = "https://chemapps.stolaf.edu/jmol/jsmol/php/jsmol.php"
-		j2sPath = "https://chemapps.stolaf.edu/jmol/jsmol/j2s"
-		js_url = "https://chemapps.stolaf.edu/jmol/jsmol/JSmol.min.js"
+		serverURL = "https://cdn.jsdelivr.net/gh/dgarayr/jsmol-test/jsmol/php/jsmol.php"
+		j2sPath = "https://cdn.jsdelivr.net/gh/dgarayr/jsmol-test/jsmol/j2s"
+		js_url = "https://cdn.jsdelivr.net/gh/dgarayr/jsmol-test/jsmol/JSmol.min.js"
 	
 	info_dict = dict(
 		height="100%",
