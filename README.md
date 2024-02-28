@@ -1,5 +1,5 @@
 # Visualization tools for AutoMeKin
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/emartineznunez/AutoMeKin/blob/main/notebooks/AutoMeKin.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/dgarayr/amk_tools/blob/master/notebooks/amk_tools.ipynb)
 
 Diego Garay-Ruiz, 2021
 Institute of Chemical Research of Catalonia
