@@ -1,4 +1,6 @@
 # Visualization tools for AutoMeKin
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/emartineznunez/AutoMeKin/blob/main/notebooks/AutoMeKin.ipynb)
+
 Diego Garay-Ruiz, 2021
 Institute of Chemical Research of Catalonia
 Prof. Carles Bo Research group
