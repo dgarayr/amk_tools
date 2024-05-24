@@ -214,7 +214,13 @@ def new_RX_adapter(rxn_contents):
 			spc2_nw = "%s%7s" % tuple(spc2)
 
 		nw_elements = elements[0:2] + [spc1_nw,elements[4],spc2_nw]
-		fmt_reac = "%5s%13s%30s %5s %30s" % tuple(nw_elements)
+
+		fmt_str = "%5s%13s%30s %5s %30s"
+		if len(elements) == 8:
+			# consider CONN/DISCONN
+			nw_elements.append(elements[7])
+			fmt_str += " %s"
+		fmt_reac = fmt_str % tuple(nw_elements)
 		new_reactions.append(fmt_reac)
 
 	return new_reactions
@@ -265,7 +271,7 @@ def RX_parser(finaldir,rxnfile="RXNet",check_connection=True):
 		for ii,line in enumerate(dump_proc):
 			# Evaluate if the line is connected
 			if (check_connection):
-				conn_status = dump[ii].split()[-1]
+				conn_status = dump_sel[ii].split()[-1]
 				if (conn_status not in ["CONN","DISCONN"]):
 					#print("%s does not contain information about connectivity of the network" % rxnfile)
 					check_connection = False
