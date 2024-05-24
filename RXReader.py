@@ -170,6 +170,56 @@ def query_all(dbcursor,filterstruc,tablename,add_zpe=True,e_units="kcal/mol",mul
 			output["formula"] = formulae[0]
 	return output
 
+def new_RX_adapter(rxn_contents):
+	'''Parses and modifies RXNet files with new file structure to conform to
+	amk-tools expected format (from 4-character reaction arrows and EOF product to formula
+	mapping, to 5-character arrows and in-line mapping).
+	Input:
+	- rxn_contents. List of strings, raw dump from RXNet file.
+	Output:
+	- new_reactions. List of strings, contents of the RXNet file adapted to the legacy
+	format of AutoMeKin RXNet files (5-char arrow, in-line product to formula mapping)
+	'''
+
+	# Retrieve the product mapping first
+	prod_mapping_dump = [line for line in rxn_contents if (("<" not in line) and (">" not in line))]
+	prod_mapping_items = [line.split() for line in prod_mapping_dump]
+	prod_mapping = {int(item[1]):"".join(item[2:]) for item in prod_mapping_items}
+	# And now handle the reaction definitions: first modify the arrows, then remap things
+	reactions_or = [line for line in rxn_contents if (("<" in line) or (">" in line))]
+	reactions_mod = [line.replace("--","---").replace("PROD","PR") for line in reactions_or]
+
+	new_reactions = []
+	for reac in reactions_mod:
+		# filter elements labelled as failed
+		if "failed" in reac:
+			continue
+		elements = reac.split()
+		spc1 = elements[2:4]
+		spc2 = elements[5:7]
+
+		spc1_name = "".join(spc1)
+		spc2_name = "".join(spc2)
+		if ("PR" in spc1):
+			formula = prod_mapping[int(spc1[1])]
+			spc1_nw = "%s: %s" % (spc1_name,formula)
+		else:
+			spc1_nw = "%s%7s" % tuple(spc1)
+
+		if ("PR" in spc2):
+			prname = "".join(spc2)
+			formula = prod_mapping[int(spc2[1])]
+			spc2_nw = "%s: %s" % (spc2_name,formula)
+		else:
+			spc2_nw = "%s%7s" % tuple(spc2)
+
+		nw_elements = elements[0:2] + [spc1_nw,elements[4],spc2_nw]
+		fmt_reac = "%5s%13s%30s %5s %30s" % tuple(nw_elements)
+		new_reactions.append(fmt_reac)
+
+	return new_reactions
+
+
 
 # Reaction network reading
 def RX_parser(finaldir,rxnfile="RXNet",check_connection=True):
@@ -196,9 +246,21 @@ def RX_parser(finaldir,rxnfile="RXNet",check_connection=True):
 		# PRa: A + B <--> PRc: C + D
 		tags = []
 		indices = []
-		dump = [item.strip() for item in frxn.readlines()[2:]] # skipping header
+		dump = [item.strip() for item in frxn.readlines()] # skipping header
+
+		# Check the kind of arrows in the file (4-char, in new LL, vs 5-char, previous impl.)
+		old_arrow_matches = [(("<--->" in line) or ("<----" in line) or ("---->" in line)) for line in dump]
+		nm = sum(old_arrow_matches)
+		#### Barrierless TSs did also consider 4-char arrow
+		if nm == 0 and not barrierless:
+			# New-type file, need to modify it
+			dump_sel = new_RX_adapter(dump[1:])
+			# 1-line header
+		else:
+			# 2-line header
+			dump_sel = dump[2:]
 		# use --- to split the reaction path separator
-		dump_proc = [item.split("---") for item in dump]
+		dump_proc = [item.split("---") for item in dump_sel]
 		
 		for ii,line in enumerate(dump_proc):
 			# Evaluate if the line is connected
@@ -486,6 +548,8 @@ def vibr_displ_parser(finaldir,G,Nmodes=-1,subst_geom=False):
 			ndid = int(nd[0].replace("MIN",""))
 			nm_file = nm_folder + "/MIN%04d.molden" % ndid
 			frq,coords,displ = molden_vibration_parser(nm_file)
+			if not coords:
+				continue
 			frq_block = [str(frqval) for frqval in frq[0:Nmodes]]
 			if (subst_geom):
 				# format the coordinates
@@ -501,6 +565,8 @@ def vibr_displ_parser(finaldir,G,Nmodes=-1,subst_geom=False):
 			tsid = int(ed[2]["name"].replace("TS",""))
 			nm_file = nm_folder + "/TS%04d.molden" % tsid
 			frq,coords,displ = molden_vibration_parser(nm_file)
+			if not coords:
+				continue
 			frq_block = [str(frqval) for frqval in frq[0:Nmodes]]
 			if (subst_geom):
 				# format the coordinates
