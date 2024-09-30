@@ -170,7 +170,8 @@ def generate_applet(width=600,height=600,alt_route=False,jsmol_resources={}):
 	)
 	return info_dict,applet,script_source
 
-def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reaction network representation",out_backend="canvas"):
+def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reaction network representation",out_backend="canvas",
+					   map_field="energy",hide_energy=False):
 	'''
 	Generation of an interactive visualization of a RXReader-processed reaction network, via the
 	from_networkx() method in Bokeh. 
@@ -205,9 +206,9 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 
 	# Modify how nodes are rendered: access the ColumnDataSource for energies and build the transformation
 	nodesource = Gbok.node_renderer.data_source
-	evalues = nodesource.data["energy"]
-	colormap = bokeh.transform.linear_cmap(field_name="energy",palette="Viridis256",
-									  low=min(evalues),high=max(evalues))
+	field_values = nodesource.data[map_field]
+	colormap = bokeh.transform.linear_cmap(field_name=map_field,palette="Viridis256",
+									  low=min(field_values),high=max(field_values))
 	Gbok.node_renderer.glyph = bkm.Circle(size=30,fill_color=colormap,fill_alpha=0.5)
 	Gbok.node_renderer.selection_glyph = bkm.Circle(size=30,fill_color=colormap,fill_alpha=0.8,line_width=2)
 	Gbok.node_renderer.hover_glyph = bkm.Circle(size=30,fill_color=colormap,fill_alpha=0.7,line_color=colormap,
@@ -269,11 +270,16 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 		}
 	}
 	'''
-
+	### but this will be overridden if energy is hidden
 	hover_node = bkm.HoverTool(description="Node hover",renderers=[Gbok.node_renderer],formatters={"@energy":"printf"})
 	hover_node.callback = bkm.CustomJS(args=dict(hover=hover_node,graph=Gbok),code=hoverJS)
 	hover_edge = bkm.HoverTool(description="Edge hover",tooltips=[("tag","@name"),("E","@energy{%.2f}")],
 							   formatters={"@energy":"printf"},renderers=[Gbok.edge_renderer],line_policy="interp")
+	if hide_energy:
+		hover_node = bkm.HoverTool(description="Node hover",renderers=[Gbok.node_renderer],
+								   tooltips=[("tag","@name")],formatters={"@energy":"printf"})
+		hover_edge = bkm.HoverTool(description="Edge hover",tooltips=[("tag","@name")],
+							   renderers=[Gbok.edge_renderer],line_policy="interp")
 	bfig.add_tools(hover_node)
 	bfig.add_tools(hover_edge)
 	Gbok.selection_policy = bkm.EdgesAndLinkedNodes()
