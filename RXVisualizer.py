@@ -200,7 +200,6 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 	if (not positions):
 		print("Generating network layout")
 		positions = nx.kamada_kawai_layout(G)
-
 	Gbok = bokeh.plotting.from_networkx(G,layout_function=positions,scale=1,center=(0,0))
 	bfig.renderers.append(Gbok)
 
@@ -258,12 +257,12 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 		var ndx = cb_data.index.indices[0]
 		var formula_list = nrend.data["formula"]
 		// fallback for cases without any fragmentation, where formula is not defined
-	    if (formula_list){
+		if (formula_list){
 			var formula = formula_list[ndx]
 		} else {
 			var formula = null
 		}
-	    if (!formula){
+		if (!formula){
 			hover.tooltips = [["tag","@name"],["E","@energy{%.2f}"]]
  		} else {
 			hover.tooltips = [["tag","@name"],["E","@energy{%.2f}"],["formula","@formula"]]
@@ -285,7 +284,6 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 	Gbok.selection_policy = bkm.EdgesAndLinkedNodes()
 	tap = bkm.TapTool(renderers=[Gbok.node_renderer,Gbok.edge_renderer])
 	bfig.add_tools(tap)
-
 	# allow to hide tags, using a CustomAction
 	# prepare simple 8x8 icon as a numpy array (8x8x3 for RGB)
 	icon = np.zeros((8,8,3),dtype=np.uint8)
@@ -296,6 +294,16 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 	hide_js = bkm.CustomJS(args={"figure":bfig,"counter":[hide_count]},code=js_callback_dict["hideLabels"])
 	hide_action = bkm.CustomAction(icon=icon,callback=hide_js,description="Hide labels")
 	bfig.add_tools(hide_action)
+
+	# action to select neighbor nodes
+
+	iconH = np.full(shape=(8,8,3),fill_value=255,dtype=np.uint8)
+	iconH[1:-1,np.ix_([2,5]),:] = 200
+	iconH[3:5,2:-2,:] = 200
+	highl_callback = bkm.CustomJS(args={"graph":Gbok}, code=js_callback_dict["highlightNeighbors"])
+	highlight = bkm.CustomAction(icon=iconH,callback=highl_callback,description="Highlight")
+	bfig.add_tools(highlight)
+
 	return bfig,Gbok
 
 def profile_datasourcer(G,profile_list):
@@ -714,7 +722,93 @@ js_callback_dict = {
 			prof.center[jj+2].visible = state[0]
 		} 
 	}
-	"""
+	""",
+	"highlightNeighbors":'''
+	var nrend = graph.node_renderer.data_source
+	var erend = graph.edge_renderer.data_source
+	var nodenames = nrend.data["name"]
+	var neighborhood = []
+	var ndx = Array.from(nrend.selected.indices)
+	for (let j = 0; j < ndx.length ; j++){
+		var j_ndx = ndx[j]
+		var current_neighborhood = nrend.data["neighbors"][j_ndx]
+		var nw_neighborhood = neighborhood.concat(current_neighborhood)
+		neighborhood = nw_neighborhood
+	}
+	var neighIdx = Array.from(ndx)
+	for (let i = 0 ; i < neighborhood.length ; i++) {
+		var i_idx = nodenames.indexOf(neighborhood[i])
+		neighIdx.push(i_idx)
+		}
+	// keep the first one as first selected
+	nrend.selected.indices = neighIdx
+	// select all edges where the initial node participates
+	var all_edge_indices = []
+	for (let j = 0; j < ndx.length ; j++){
+		var j_ndx = ndx[j]
+		var nd_sel = nodenames[j_ndx].toString()
+		var start_from_ndx = erend.data["start"].map((nd,i) => nd === nd_sel ? i : -1).filter(index => index !== -1)
+		var end_from_ndx = erend.data["end"].map((nd,i) => nd === nd_sel ? i : -1).filter(index => index !== -1)
+		var nw_edge_indices = start_from_ndx.concat(end_from_ndx)
+		all_edge_indices = all_edge_indices.concat(nw_edge_indices)
+	}
+	erend.selected.indices = []
+	erend.selected.indices = all_edge_indices
+
+	''',
+	"showSelectedOnly":'''
+		var nrend = graph.node_renderer.data_source
+		var erend = graph.edge_renderer.data_source
+		var nodesel = nrend.selected.indices
+		var edgesel = erend.selected.indices
+		var nodeindices = nrend.data["index"]
+		var edgenames = erend.data["name"]
+
+		var numNodes = nodeindices.length
+		var numEdges = edgenames.length
+
+		// access the labels too
+		var labsNodes = figure.center[2].source.data
+		var labsEdges = figure.center[3].source.data
+		if (box.active.length >= 1){
+			var k = 0
+			for (let i = 0; i < numNodes ; i++) {
+				if (!nodesel.includes(i)){
+						nrend.data["index"][i] = null
+						labsNodes["nnames"][i] = " "
+				}
+			}
+			for (let j = 0; j < numEdges ; j++) {
+				var is_tsb = edgenames[j].includes("TSb")
+				if (!edgesel.includes(j)){
+					erend.data["start"][j] = null
+					erend.data["end"][j] = null
+					if (!is_tsb){
+						labsEdges["enames"][k] = " "
+					}
+				}
+				if (!is_tsb){k += 1}
+			}
+		} else {
+			var k = 0
+			for (let i = 0; i < numNodes ; i++) {
+				nrend.data["index"][i] = backupNodeIdxs[i]
+				labsNodes["nnames"][i] = labsNodes["labCopy"][i]
+			}
+			for (let j = 0; j < numEdges ; j++) {
+				var is_tsb = edgenames[j].includes("TSb")
+				erend.data["start"][j] = backupEdgeRoutes["start"][j]
+				erend.data["end"][j] = backupEdgeRoutes["end"][j]
+				if (!is_tsb) {
+					labsEdges["enames"][k] = labsEdges["labCopy"][k]
+				}
+				if (!is_tsb){k += 1}
+			}
+		}
+
+		nrend.change.emit()
+		erend.change.emit()
+	'''
 
 }
 
@@ -751,6 +845,7 @@ def full_view_layout(bokeh_figure,bokeh_graph,G=None,alt_jsmol=False,jsmol_resou
 	b2 = bkm.Button(label="To clipboard",max_width=int(w1/4),css_classes=['xtest'],align="center")
 	text_input = bkm.TextInput(value=nodesource.data["name"][0],max_width=int(w1/4),align="center")
 	b3 = bkm.Button(label="Locate molecule",max_width=2*int(w1/4),align="center")
+	cb_isol = bkm.CheckboxGroup(labels=["Isolate selection"],max_width=int(w1/4),align="center")
 	menu = bkm.Dropdown(label="Normal modes",menu=[("No vibr. loaded","None"),None],disabled=True,max_width=2*int(w1/4),align="center")
 	spc1 = bkm.Spacer(width=int(w2/2),align="center")
 	text = bkm.Div(text="(Click an element)",height=hw,align="center")
@@ -776,6 +871,20 @@ def full_view_layout(bokeh_figure,bokeh_graph,G=None,alt_jsmol=False,jsmol_resou
 	js_menu_selector = bkm.CustomJS(args = {"source":script_source,"menu":menu,"textField":text},
 					 			    code = js_callback_dict["chooseVibrationMenu"])
 
+	### prepare backup data for hiding
+	backup_node_indices = copy.deepcopy(nodesource.data["index"])
+	backup_edges = {"start":copy.deepcopy(edgesource.data["start"]),
+					"end":copy.deepcopy(edgesource.data["end"])}
+
+	bokeh_figure.center[2].source.data["labCopy"] = bokeh_figure.center[2].source.data["nnames"]
+	bokeh_figure.center[3].source.data["labCopy"] = bokeh_figure.center[3].source.data["enames"]
+
+
+	js_isolate_selected = bkm.CustomJS(args={'backupNodeIdxs':backup_node_indices,'backupEdgeRoutes':backup_edges,'graph':bokeh_graph,
+											 'colNames':nodesource.column_names,'box':cb_isol,'figure':bokeh_figure},
+										code=js_callback_dict["showSelectedOnly"])
+
+
 	# Set up the JS callbacks for nodes and edges
 	bokeh_graph.node_renderer.data_source.selected.js_on_change('indices',js_load_mol)
 	bokeh_graph.edge_renderer.data_source.selected.js_on_change('indices',js_load_mol)
@@ -786,6 +895,8 @@ def full_view_layout(bokeh_figure,bokeh_graph,G=None,alt_jsmol=False,jsmol_resou
 	b2.js_on_click(js_geo_clipboard)
 	# Allow to select by name
 	b3.js_on_click(js_mol_locator)
+	# Isolate selection
+	cb_isol.js_on_change("active",js_isolate_selected)
 	# Vibration selector
 	menu.js_on_event("menu_item_click",js_menu_selector)
 	
@@ -796,7 +907,7 @@ def full_view_layout(bokeh_figure,bokeh_graph,G=None,alt_jsmol=False,jsmol_resou
 	# | 	Network visualization		 ||		JSMol // Profile		|
 	# | Location text | Loc. button		 ||		Profile options 		|
 
-	col1 = bkm.Column(bkm.Row(b1,menu,b2,height=hw),bokeh_figure,bkm.Row(text_input,b3,height=hw),width=w1)
+	col1 = bkm.Column(bkm.Row(b1,menu,b2,height=hw),bokeh_figure,bkm.Row(text_input,b3,cb_isol,height=hw),width=w1)
 	col2 = bkm.Column(bkm.Row(spc1,text,height=hw),bkm.Row(app),width=w2)
 	layout = bokeh.layouts.grid([col1,col2],ncols=2)
 
@@ -1003,6 +1114,10 @@ def gen_view_cmd(args):
 			Gwork = G
 	else:
 		Gwork = G
+
+	# add neighbor lists to nodes
+	for nd in Gwork.nodes(data=True):
+		nd[1]["neighbors"] = list(G.neighbors(nd[0]))
 	# Generate the visualization, parsing the size
 	width_value,height_value = [int(item) for item in args.resolution.split(",")]
 	if (args.fasterlayout):
