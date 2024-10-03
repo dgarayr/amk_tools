@@ -1,0 +1,6 @@
+cff-version: 1.2.0
+authors:
+- family-names: "Garay-Ruiz"
+  given-names: "Diego"
+title: "amk_tools"
+url: "https://github.com/dgarayr/amk_tools"
