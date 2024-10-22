@@ -6,5 +6,5 @@ setup(name='amk_tools',
       py_modules=['RXReader','RXVisualizer'],
       install_requires=['networkx','bokeh>=2.3.2,<3.0.0',
                         'jsmol_to_bokeh @ git+https://github.com/dgarayr/jsmol_to_bokeh.git',
-                        'matplotlib','numpy']
+                        'matplotlib','numpy<2','scipy']
       )
