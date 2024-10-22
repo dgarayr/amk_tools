@@ -5,6 +5,6 @@ setup(name='amk_tools',
       description="RxN management for AutoMeKin",
       py_modules=['RXReader','RXVisualizer'],
       install_requires=['networkx','bokeh>=2.3.2,<3.0.0',
-                        'jsmol_bokeh_extension @ git+https://github.com/dgarayr/jsmol-bokeh-extension.git',
+                        'jsmol_to_bokeh @ git+https://github.com/dgarayr/jsmol_to_bokeh.git',
                         'matplotlib','numpy']
       )

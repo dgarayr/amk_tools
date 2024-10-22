@@ -6,7 +6,7 @@ import bokeh.layouts
 import argparse
 import sys
 import RXReader as arx
-from jsmol_bokeh_extension import JSMol
+from jsmol_to_bokeh import JSMol
 import networkx as nx
 import numpy as np
 import copy
@@ -980,6 +980,8 @@ def generate_visualization(G,finaldir,title,outfile,Nvibrations=-1,with_profiles
 
 	style_template = """
 	{% block postamble %}
+
+	<script type="text/javascript" src="https://cdn.jsdelivr.net/gh/dgarayr/jsmol_to_bokeh/jsmol_to_bokeh.min.js"></script>
 	<style>
 	.bk-root .bk-btn-default {
 		font-size: 1.2vh;
