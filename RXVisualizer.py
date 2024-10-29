@@ -500,7 +500,7 @@ js_callback_dict = {
 		var einds = erend.selected.indices
 		if (ninds.length) {
 			var rend = nrend
-		} else {
+			} else {
 			var rend = erend
 		}
 		var ndx = rend.selected.indices[0]
@@ -528,7 +528,7 @@ js_callback_dict = {
 		var layout = graph.layout_provider.graph_layout
 		// fetch the query in the data sources, choosing the appropiate renderer depending on the query
 		var mol_query = text_input.value
-		if (mol_query.includes("TS")) {
+		if (mol_query.includes("TS") || mol_query.includes("ts")) {
 			var renderer = erend
 			var other_renderer = nrend
 		} else {
@@ -536,9 +536,33 @@ js_callback_dict = {
 			var other_renderer = erend
 		}
 		var pool_names = renderer.data["name"]
-		var ndx = pool_names.indexOf(mol_query)
+		// split species joined by + sign
+		var pool_species = pool_names.reduce((acc,name) =>
+					{acc.push(name.split("+"));
+					return acc},[])
+		// function to match results in the array
+		var getSubstringIndices = function(arr,query){
+			return arr.reduce(
+					function(matches,tgt,i){
+							if (tgt.includes(query))
+						{matches.push(i)};
+							return matches;
+					},
+					[]);
+		}
+
+		if (!mol_query.includes("+")) {
+			var ndx = getSubstringIndices(pool_species,mol_query)
+		} else {
+			var ndx_u = pool_names.indexOf(mol_query)
+			if (ndx_u < 0) {
+				var ndx = []
+			} else {
+				var ndx = [ndx_u]
+			}
+		}
 		// locate positions of the node or of the nodes defining an edge
-		if (mol_query.includes("TS")) {
+		if (mol_query.includes("TS") || mol_query.includes("ts")) {
 			var n1 = renderer.data["start"][ndx]
 			var n2 = renderer.data["end"][ndx]
 			var pos1 = layout[n1]
@@ -547,13 +571,12 @@ js_callback_dict = {
 			positions[0] = 0.5*(pos1[0]+pos2[0])
 			positions[1] = 0.5*(pos1[1]+pos2[1])
 		} else {
-			var positions = layout[mol_query]
+			var positions = layout[pool_names[ndx[0]]]
 		}
-		// returns -1 if element is not present
-		if (ndx >= 0) {
+		if (ndx.length > 0) {
 			// clearing other sel. avoids problems for model loading sometimes
 			other_renderer.selected.indices = []
-			renderer.selected.indices = [ndx]
+			renderer.selected.indices = ndx
 			fig.x_range.start = positions[0] - 0.5
 			fig.x_range.end = positions[0] + 0.5
 			fig.y_range.start = positions[1] - 0.5
@@ -679,7 +702,6 @@ js_callback_dict = {
 			// tags are EVEN entries and energies are ODD
 			prof.center[index+2].visible = true
 			prof.center[index+3].visible = false
-			console.log(prof.center[index+3].text,prof.center[index+3].visible)
 		}
 		""",
 
@@ -746,7 +768,7 @@ js_callback_dict = {
 	var all_edge_indices = []
 	for (let j = 0; j < ndx.length ; j++){
 		var j_ndx = ndx[j]
-		var nd_sel = nodenames[j_ndx].toString()
+		var nd_sel = nodenames[j_ndx]
 		var start_from_ndx = erend.data["start"].map((nd,i) => nd === nd_sel ? i : -1).filter(index => index !== -1)
 		var end_from_ndx = erend.data["end"].map((nd,i) => nd === nd_sel ? i : -1).filter(index => index !== -1)
 		var nw_edge_indices = start_from_ndx.concat(end_from_ndx)
