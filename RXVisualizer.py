@@ -171,7 +171,7 @@ def generate_applet(width=600,height=600,alt_route=False,jsmol_resources={}):
 	return info_dict,applet,script_source
 
 def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reaction network representation",out_backend="canvas",
-					   map_field="energy",hide_energy=False):
+					   map_field="energy",hide_energy=False,palette="Viridis256"):
 	'''
 	Generation of an interactive visualization of a RXReader-processed reaction network, via the
 	from_networkx() method in Bokeh. 
@@ -206,7 +206,7 @@ def bokeh_network_view(G,positions=None,width=800,height=600,graph_title="Reacti
 	# Modify how nodes are rendered: access the ColumnDataSource for energies and build the transformation
 	nodesource = Gbok.node_renderer.data_source
 	field_values = nodesource.data[map_field]
-	colormap = bokeh.transform.linear_cmap(field_name=map_field,palette="Viridis256",
+	colormap = bokeh.transform.linear_cmap(field_name=map_field,palette=palette,
 									  low=min(field_values),high=max(field_values))
 	Gbok.node_renderer.glyph = bkm.Circle(size=30,fill_color=colormap,fill_alpha=0.5)
 	Gbok.node_renderer.selection_glyph = bkm.Circle(size=30,fill_color=colormap,fill_alpha=0.8,line_width=2)
